@@ -1,4 +1,4 @@
-function saveMostActiveEpochToFile(data,session,t_max)
+function output = saveMostActiveEpochToFile(data,session,t_max)
 
     path = uigetdir('Select save location:');
 
@@ -19,7 +19,7 @@ function saveMostActiveEpochToFile(data,session,t_max)
         valid = iswithin(spikes,t_start,t_end);
         isi{i} = diff(spikes(valid));
         ff(i) = var(isi{i})/(mean(isi{i})^2);
-        if ~iswithin(ff(i),.5,12)
+        if ~iswithin(ff(i),.5,20) || length(spikes(valid))/t_max < .25
             fprintf('Unit %d ignored.\n',i)
             continue
         end
@@ -28,15 +28,19 @@ function saveMostActiveEpochToFile(data,session,t_max)
         spikeVec = [spikeVec; newSpikes];
     end
 
-    [~,ord] = sort(spikeVec(:,2),'ascend');
-    output = spikeVec(ord,:);
-    output(:,2) = round(output(:,2))/1000;
-    output(:,2) = round(output(:,2) - min(output(:,2)) + .01,3);
+    % [~,ord] = sort(spikeVec(:,2),'ascend');
+    if isempty(spikeVec)
+        output = [0 0];
+        return
+    end
+    output = spikeVec;%(ord,:);
+    output(:,2) = round(output(:,2) - t_start)/1000;
+    output(:,2) = output(:,2) + .01;
 
     fname = sprintf('spikes_session%s_start%d_end%d.txt',sessionData.sessionID,t_start,t_end);
     fp = fullfile(path,fname);
 
-    writematrix(output,fp,'Delimiter','tab')
+    % writematrix(output,fp,'Delimiter','tab')
     fprintf(['\nSaved most active %d seconds of data from session %d to file. \n\n'...
         'Session ID: %s \nStart timestamp: %d \nEnd timestamp: %d \nAverage background rate: %.1f\nNumber of units: %d\n'],...
         t_max,session,sessionData.sessionID, t_start,t_end,length(output)/output(end,2),cnt)
