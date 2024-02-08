@@ -2,9 +2,6 @@ function plotSequences(data,sessions,times,sequences)
 
     ts = sequences.ts;
     type = sequences.type;
-    offsets = sequences.offsets;
-    widths = sequences.widths;
-    amps = sequences.amplitudes;
 
     dt = diff(times,1,2);
 
@@ -36,7 +33,7 @@ function plotSequences(data,sessions,times,sequences)
     for s = 1:length(sessions)
         for levType = 1:3
             cur_on = leverOn{s}{levType};
-            if ~isempty(cur_on)         
+            if ~isempty(cur_on)
                 xline(leverOn{s}{levType}(1),['-' line_cols{levType}])
                 hold on
                 xline(leverOff{s}{levType}(1),['--',line_cols{levType}])
@@ -45,28 +42,29 @@ function plotSequences(data,sessions,times,sequences)
             else
                 startIdxs(s,levType) = 0;
             end
-        end
-        if all(startPlot)
-            break
+            if all(startPlot)
+                break
+            end
         end
     end
 
     for s = 1:length(sessions)
         for levType = 1:3
-            cur_data = leverOn{s}{levType};
-            if isempty(cur_data)
+            data_on = leverOn{s}{levType};
+            data_off = leverOff{s}{levType};
+            if isempty(data_on)
                 continue
             end
             if s == 1
-                xline(cur_data(startIdxs(levType):end),...
+                xline(data_on(startIdxs(levType):end),...
                     ['--' line_cols{levType}],'HandleVisibility','off')
-                xline(cur_data(startIdxs(levType):end),...
-                    ['--' line_cols{levType}],'HandleVisibility','off')
+                xline(data_off(startIdxs(levType):end),...
+                    ['-' line_cols{levType}],'HandleVisibility','off')
             else
-                xline(cur_data,...
+                xline(data_on,...
                     ['--' line_cols{levType}],'HandleVisibility','off')
-                xline(cur_data,...
-                    ['--' line_cols{levType}],'HandleVisibility','off')
+                xline(data_off,...
+                    ['-' line_cols{levType}],'HandleVisibility','off')
             end
         end
     end
@@ -82,7 +80,7 @@ function plotSequences(data,sessions,times,sequences)
 
     xlim([25, 37])
     ylim([.95, 1.1])
-    legend_cell = {'lever 1 on','lever 1 off','lever 2 off','lever 2 off'};
+    legend_cell = {'lever 1 on','lever 1 off','lever 2 off','lever 2 off','lever 3 on','lever 3 off'};
     for seq = 1:max(type)
         legend_cell{end+1} = sprintf('sequence %d',seq);
     end
