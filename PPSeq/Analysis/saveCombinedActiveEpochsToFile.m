@@ -1,11 +1,17 @@
-function [output,times] = saveCombinedActiveEpochsToFile(data,sessions,t_max,silent)
+function [output,times,units_ignored] = ...
+        saveCombinedActiveEpochsToFile(data,sessions,t_max,silent,ign_list)
+
+    if nargin < 5
+        ign_list = -1;
+    end
 
     if nargin < 4
         silent = false;
     end
 
     if ~silent
-        path = uigetdir('Select save location:');
+        [fname,path] = uiputfile('*.txt','Select save location',...
+            '/Users/rudygelb-bicknell/Documents/PPSeq_fork.jl/demo/data/');
     end
 
     sessionData = data(sessions);
@@ -27,7 +33,10 @@ function [output,times] = saveCombinedActiveEpochsToFile(data,sessions,t_max,sil
     end
 
     spikeVec = [];
+    units_ignored = [];
+    invalid = [];
     cnt = 0;
+
     for i = 1:length(unitLabels)
         currUnit = unitLabels(i);
         valid = [];
@@ -43,9 +52,12 @@ function [output,times] = saveCombinedActiveEpochsToFile(data,sessions,t_max,sil
             fr(i,j) = length(spikes_new(valid_new))/(t_max_i);
             spikes = [spikes; spikes_new];
         end
-        if ~any(iswithin(ff(i,:),.5,20)) || all(fr(i,:) < .25) || all(fr(i,:) > 10)
+        if any(ign_list == currUnit) || ...
+                (all(ign_list == -1) && (~any(iswithin(ff(i,:),.5,12)) || all(fr(i,:) < .25) || any(fr(i,:) > 5)))
             if ~silent
-                fprintf('Unit %d ignored.\n',i)
+                fprintf('Unit %d ignored.\n',currUnit)
+                units_ignored = [units_ignored currUnit];
+                invalid = [invalid i];
             end
             continue
         end
@@ -63,11 +75,6 @@ function [output,times] = saveCombinedActiveEpochsToFile(data,sessions,t_max,sil
     output(:,2) = output(:,2) + .01;
 
     if ~silent
-        nameCell = '';
-        for i = 1:length(sessions)
-            nameCell = [nameCell sprintf('_s%d',sessions(i))];
-        end
-        fname = sprintf('spikes%s.txt',nameCell);
         fp = fullfile(path,fname);
         writematrix(output,fp,'Delimiter','tab')
         fprintf(['\nSaved most active %d seconds of data from sessions %s to ''%s''. \n\n'...
