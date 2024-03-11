@@ -1,5 +1,5 @@
 %% Set data to acquire
-
+deadEle = [13:16, 27:29, 31:33, 38,56,64];
 fs = 30000; %30kHz
 
 t_start = 18; % start acquisition at this time (18:00 hours)
@@ -28,10 +28,10 @@ ephys = [];
 dio = [];
 
 t = 70; % initial guess for time to acquire chunk
-saveEvery = 5; % save data every x chunks
+saveEvery = 10; % save data every x chunks
 
 %% Acquire data
-for chk = 16:length(shifts)
+for chk = 1:length(shifts)
     
     % print out how far we are
     clc
@@ -46,7 +46,7 @@ for chk = 16:length(shifts)
     % concatenate new chunk and old data
     data.acc = [data.acc; acc];
     data.ephys = [data.ephys, ephys];
-    data.dio = [data.dio, dio];
+    data.dio = [data.dio; dio];
     
     % save data every x times
     if mod(chk,saveEvery) == 0
@@ -57,31 +57,3 @@ for chk = 16:length(shifts)
     end
     
 end
-
-%% Calculate LFP
-
-fs_ds = fs/100; % downsampled sampling rate is fs/100
-step_s = 1 * fs_ds; % window steps in 1 second increments
-win_s = 5 * fs_ds; % window length is 5 seconds (80% overlap between windows)
-
-for ch = 1:size(data.ephys,1)
-    clc
-    fprintf('Calculating LFP for channel %d of %d', ch, size(data.ephys,1));
-    [~, freqs, t, pwr(:,:,ch)] = spectrogram(data.ephys(ch,:), ...
-        win_s, win_s - step_s, [], fs_ds, 'yaxis');
-end
-
-pwr_mean = squeeze(mean(pwr,3));
-
-%% Exact plotting code from new RHD matlab script
-imagesc(t/60, freqs, log10(pwr_mean + eps))
- 
-hold on;
-axis xy
-ylabel('Frequency (Hz)')
-xlabel('Time (min)')
-h = colorbar;
-h.Label.String = 'Log(Power)';
-axis tight
-ylim([.5 55])
-caxis([0 1.5])

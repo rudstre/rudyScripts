@@ -4,8 +4,8 @@ if nargin < 4
     strict = false;
 end
 if nargin == 2 && ~isscalar(a)
-    b = a(2);
-    a = a(1);
+    b = a(2,:);
+    a = a(1,:);
 end
 
 if strict
