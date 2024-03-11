@@ -1,4 +1,4 @@
-function selected_epochs = sleepStage(rhdData,ustruct,t_start,t_end)
+function selected_epochs = sleepStage(rhdData,ustruct,t_start,t_end,unit_list)
 
 %% Get LFP
 deadEle = [13:16, 27:29, 31:33, 38,56,64];
@@ -47,8 +47,7 @@ ax3 = gca;
 linkaxes([ax1,ax2,ax3],'x')
 axis tight
 
-%%
-
+%% User-selection of delta epochs to export
 epochs_linear = find(diff(delta_final))/60;
 epochs = zeros(length(epochs_linear)/2,2);
 if delta_final(1)
@@ -84,6 +83,7 @@ selected_epochs_sec = double(selected_epochs) * 60;
 selected_time = diff(selected_epochs,[],2);
 tot_time = sum(selected_time);
 
+%% Save selected epochs to disk
 [fname,path] = uiputfile('*.txt','Select save location',...
     '/Users/rudygelb-bicknell/Documents/PPSeq_fork.jl/demo/data/');
 fp = fullfile(path,fname);
@@ -91,7 +91,7 @@ fp = fullfile(path,fname);
 end_time = -.5;
 for i = 1:size(selected_epochs,1)
     end_time = saveRHDEpochToFile(ustruct,'637181493672024509',...
-        selected_epochs_sec(i,1) * 30000, selected_epochs_sec(i,2) * 30000, end_time + .5, fp);
+        selected_epochs_sec(i,1) * 30000, selected_epochs_sec(i,2) * 30000, end_time + .5, fp, unit_list);
 end
 
 clc

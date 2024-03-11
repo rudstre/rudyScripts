@@ -1,8 +1,10 @@
-function end_time = saveRHDEpochToFile(ustruct,rhdID,t_start,t_end,offset,fp)
+function end_time = saveRHDEpochToFile(ustruct,rhdID,t_start,t_end,offset,fp,unit_list)
 
 validSessions = cellfun(@(x)any(strcmp(rhdID,x)),{ustruct.chainEPhysFile});
 
 unitLabels = find(validSessions);
+unitLabels = unitLabels(ismember(unitLabels,unit_list));
+
 sessionUnits = ustruct(unitLabels);
 
 labels = cellfun(@(x) find(strcmp(rhdID, x)),...
@@ -18,7 +20,7 @@ for i = 1:length(sessionUnits)
         ismember(unit.spikeLabels,labels{i}) & iswithin(unit.spikeTimes,t_start,t_end))';
 end
 
-unitLabels_all = repelem(unitLabels, ...
+unitLabels_all = repelem(1:length(unitLabels), ...
     cellfun(@length,{sessionUnits.spikeTimes}));
 
 spikeVec = double([ unitLabels_all' [sessionUnits.spikeTimes]' ]);
