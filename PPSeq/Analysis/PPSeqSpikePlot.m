@@ -1,59 +1,108 @@
-function PPSeqSpikePlot(data,sessions,times,leverOffset,spikeOffset)
+function ord = PPSeqSpikePlot(ord,data,sessions,times,leverOffset,spikeOffset)
 
-    gcfFullScreen;
+if nargin < 2
+    plotLever = false;
+    spikeOffset = 0;
+else
+    plotLever = true;
+end
+
+gcfFullScreen;
+
+if plotLever
     ax_lever = plotLeverPresses(data,sessions,times,leverOffset);
     
+    % Hack to be able to get two legends on the same figure
     ax_seq = copyobj(ax_lever, gcf); delete(get(ax_seq, 'Children'));
     set(ax_seq,'visible','off')
     linkaxes([ax_lever,ax_seq])
+else
+    ax_seq = gca;
+end
 
-    importPPSeqModel;
+% PPSeq = importPPSeqModel;
+PPSeq = importPPSeqModel('C:\Users\rudygb\Documents\PPSeq_fork.jl');
 
-    [~,idx] = ismember(PPSeq.assignments,PPSeq.events.assignment_id);
+[~,idx] = ismember(PPSeq.assignments,PPSeq.events.assignment_id);
 
-    spikes = PPSeq.spikes; spikes(:,2) = spikes(:,2) - spikeOffset;
+spikes = PPSeq.spikes; spikes(:,2) = spikes(:,2) - spikeOffset;
 
-    spikes(:,3) = PPSeq.events.type(idx);
+spikes(:,3) = PPSeq.events.type(idx);
 
-    spikes(:,1) = PPSeq.order(spikes(:,1));
-    seqtypes = [-1 1:11];%unique(spikes(:,3));
+spikes(:,4) = PPSeq.events.warp(idx);
 
-    col_mat = [0,0,0;distinguishable_colors(length(seqtypes),{'w','k'})];
-    skip = [3,9,11];
+%% Reorder
+seqtypes = unique(spikes(:,3));
+seq_oi = [4,2];
+skip = seqtypes; skip(ismember(skip,seq_oi)) = [];
+
+evnts = PPSeq.events;
+amps_oi = evnts.amplitudes(:,seq_oi);
+[~,n] = max(amps_oi,[],2);
+
+n(all(amps_oi < -4,2)) = 0;
+
+ord = [];
+for i = 1:length(seq_oi)
+    cur_seq = seq_oi(i);
+    cur_units = find(n == i);
+    offsets_oi = evnts.offsets(cur_units,cur_seq);
+    [~,idx] = sort(offsets_oi);
+    ord = [ord; cur_units(idx)];
+end
+ord = [ord; find(~ismember(1:33,ord))'];
+spikes(:,1) = arrayfun(@(x) find(ord == x),spikes(:,1));
+
+%% Colors
+col_mat = [0,0,0; ...
+    distinguishable_colors(11, {'w','k'})...
+    ];
+
+% col_mat = col_mat([1,3,5,9,10,11],:);
+
+%%
+
+for i = 1:length(seqtypes)
+    seq = seqtypes(i);
+    spikesOI = spikes(:,3) == seq;
+    seq_spikes = spikes(spikesOI,1:2);
+    hold on
+    if ismember(seq,skip)
+        scatter(ax_seq,seq_spikes(:,2), seq_spikes(:,1), 18, [.85,.85,.85], 'filled')
+        continue
+    end
     
-    for i = 1:length(seqtypes)
-        seq = seqtypes(i);
-        seq_spikes = spikes(spikes(:,3) == seq,1:2);
-        if ismember(seq,skip)
-            continue
-        end
-        
-        if isempty(seq_spikes)
-            scatter(ax_seq,nan,nan,18,col_mat(i,:),'filled')
-            continue
-        end
-
-        scatter(ax_seq,seq_spikes(:,2),seq_spikes(:,1),18,col_mat(i,:),'filled')
-        hold on
+    if isempty(seq_spikes)
+        scatter(ax_seq,nan, nan, 18, col_mat(i,:), 'filled')
+        continue
     end
+    scatter(ax_seq,seq_spikes(:,2), seq_spikes(:,1), 18, col_mat(i,:), 'filled')
+end
 
 
+%% Legend stuff
+legend_seq = {'background spikes'};
+
+for i = 2:length(seqtypes)
+    seq = seqtypes(i);
+    legend_seq{end+1} = sprintf('sequence %d',seq);
+end
+
+legend(ax_seq,legend_seq,'Location', 'northeast')
+set(ax_seq,'FontSize',18)
+
+if plotLever
     legend_lever = {'center lever','left lever','right lever'};
-    legend_seq = {'background spikes'};
-
-    for i = 2:length(seqtypes)
-        seq = seqtypes(i);
-        if ismember(seq,skip)
-            continue
-        end
-        legend_seq{end+1} = sprintf('sequence %d',seq);
-    end
-
     legend(ax_lever,legend_lever,'Location', 'southeast')
-    legend(ax_seq,legend_seq,'Location', 'northeast')
-
-
-    xlim([0 30])
-    ylim([0 max(spikes(:,1))])
     set(ax_lever,'FontSize',18)
-    set(ax_seq,'FontSize',18)
+end
+
+xlim([0 30])
+ylim([0 max(spikes(:,1))])
+
+%% Plot event timestamps and warp
+eventsOI = iswithin(evnts.type, 8, 8);
+
+scatter(evnts.ts(eventsOI), ...
+    -1 * evnts.type(eventsOI), ...
+    1 * 100)
