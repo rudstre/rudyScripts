@@ -3,7 +3,8 @@ function end_time = saveRHDEpochToFile(ustruct,rhdID,t_start,t_end,offset,fp,uni
 validSessions = cellfun(@(x)any(strcmp(rhdID,x)),{ustruct.chainEPhysFile});
 
 unitLabels = find(validSessions);
-unitLabels = unitLabels(ismember(unitLabels,unit_list));
+labIdx = arrayfun(@(x) find(unitLabels == x),unit_list);
+unitLabels = unitLabels(labIdx);
 
 sessionUnits = ustruct(unitLabels);
 
