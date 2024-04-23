@@ -35,7 +35,7 @@ function [output,times,units] = ...
 
     spikeVec = [];
     units_ignored = [];
-    invalid = [];
+    indices_ignored = [];
     cnt = 0;
     units = [];
     for i = 1:length(unitLabels)
@@ -58,7 +58,7 @@ function [output,times,units] = ...
             if ~silent
                 fprintf('Unit %d ignored.\n',currUnit)
                 units_ignored = [units_ignored currUnit];
-                invalid = [invalid i];
+                indices_ignored = [indices_ignored i];
             end
             continue
         end
@@ -82,5 +82,18 @@ function [output,times,units] = ...
         fprintf(['\nSaved most active %d seconds of data from sessions %s to ''%s''. \n\n'...
             '\nAverage background rate: %.1f\nNumber of units: %d\nNumber of total spikes: %d\n'],...
             t_max,num2str(sessions), fp, length(output)/output(end,2),cnt,length(output))
+        
+        [~,fname_noext] = fileparts(fp);
+
+        spike_info.times = times;
+        spike_info.units = units;
+        spike_info.units_ignored = units_ignored;
+        spike_info.indices_ignored = indices_ignored;
+        spike_info.ignore_list = ign_list;
+        spike_info.total_units = cnt;
+        spike_info.total_spikes = length(output);
+        spike_info.total_time = t_max;
+        spike_info.sessions = sessions;
+        save(fullfile(path,[fname_noext '_info']),'spike_info');
     end
 end

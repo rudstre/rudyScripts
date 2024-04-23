@@ -1,5 +1,9 @@
 function leverData = getLeverData(data,sessions,times,leverOffset)
 
+    if nargin < 5
+        fs_lever = 1000;
+    end
+    
     dt = diff(times,1,2);
 
     for s = 1:length(sessions)
@@ -13,8 +17,8 @@ function leverData = getLeverData(data,sessions,times,leverOffset)
         valid_diff = off_start - find(valid_on,1);
         leverData(s).offTimes = leverOff(find(valid_on) + valid_diff);
 
-        leverData(s).onTimes = (leverData(s).onTimes - times(s,1) + sum(dt(1:s-1)) + leverOffset*1000)/1000;
-        leverData(s).offTimes = (leverData(s).offTimes - times(s,1) + sum(dt(1:s-1)) + leverOffset*1000)/1000;
+        leverData(s).onTimes = (leverData(s).onTimes - times(s,1) + sum(dt(1:s-1)) + leverOffset*1000)/fs_lever;
+        leverData(s).offTimes = (leverData(s).offTimes - times(s,1) + sum(dt(1:s-1)) + leverOffset*1000)/fs_lever;
 
         leverData(s).leverCh = data(cur_session).leverCh(valid_on);
     end

@@ -1,4 +1,4 @@
-function [output,times] = saveMostActiveEpochToFile(data,session,t_max,silent)
+function [output,times,units] = saveMostActiveEpochToFile(data,session,t_max,silent)
 
     if nargin < 4
         silent = false;
@@ -19,6 +19,7 @@ function [output,times] = saveMostActiveEpochToFile(data,session,t_max,silent)
     close all
 
     spikeVec = [];
+    units = [];
     cnt = 0;
     for i = 1:length(sessionData.spikeTimes)
         spikes = sessionData.spikeTimes{i};
@@ -34,6 +35,7 @@ function [output,times] = saveMostActiveEpochToFile(data,session,t_max,silent)
         cnt = cnt + 1;
         newSpikes = [cnt*ones([nnz(valid),1]) spikes(valid)];
         spikeVec = [spikeVec; newSpikes];
+        units(end+1) = sessionData.unitLabel(i);
     end
 
     if isempty(spikeVec)

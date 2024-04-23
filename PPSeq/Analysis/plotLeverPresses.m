@@ -1,8 +1,11 @@
-function [ax,leverOn,leverOff] = plotLeverPresses(data,sessions,times,leverOffset)
+function [ax,leverOn,leverOff] = plotLeverPresses(data,sessions,times,leverOffset,fs_lever)
 
+    if nargin < 5
+        fs_lever = 1000;
+    end
     alpha = .1;
 
-    leverData = getLeverData(data,sessions,times,leverOffset);
+    leverData = getLeverData(data,sessions,times,leverOffset,fs_lever);
 
     leverOn = arrayfun(@(lvDat) arrayfun(@(lvNum) ...
         lvDat.onTimes(lvDat.leverCh == lvNum), ...
