@@ -1,9 +1,9 @@
-function leverData = getLeverData(data,sessions,times,leverOffset)
+function leverData = getLeverData(data,sessions,times,leverOffset,fs_lever)
 
     if nargin < 5
-        fs_lever = 1000;
+        fs_lever = 30000;
     end
-    
+
     dt = diff(times,1,2);
 
     for s = 1:length(sessions)
