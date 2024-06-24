@@ -1,13 +1,14 @@
 function selected_epochs = sleepStage(rhdData,ustruct,t_start,t_end,unit_list)
 
+params = rhdData.params;
+fs_acc = 1; % Hz
+
 %% Get LFP
-deadEle = [13:16, 27:29, 31:33, 38,56,64];
-[lfp,artifact,freqs,t] = calcLFP(rhdData.ephys,t_start,t_end,deadEle);
+deadEle = [1:4, 13:16, 27:33, 38, 56, 64];
+[lfp,artifact,freqs,t] = calcLFP(rhdData,t_start,t_end,deadEle);
 
 %% Get accelerometer data
-ts_acc = t_start/300; te_acc = t_end/300;
-acc_all = rhdData.acc(ts_acc:te_acc,2);
-
+acc_all = rhdData.acc(seconds(t_start):seconds(t_end) * fs_acc, 2);
 [acc_bin, acc_smooth] = getActivePeriods(acc_all);
 
 %% Get periods of delta
@@ -79,7 +80,7 @@ while true
     end
 end
 
-selected_epochs_sec = double(selected_epochs) * 60;
+selected_epochs_sec = seconds(t(round(selected_epochs * 60)));
 selected_time = diff(selected_epochs,[],2);
 tot_time = sum(selected_time);
 
@@ -89,9 +90,12 @@ tot_time = sum(selected_time);
 fp = fullfile(path,fname);
 
 end_time = -.5;
+file_offset = seconds(params.acq_offset_s/params.fs_ephys) + t_start;
 for i = 1:size(selected_epochs,1)
-    end_time = saveRHDEpochToFile(ustruct,'637181493672024509',...
-        selected_epochs_sec(i,1) * 30000, selected_epochs_sec(i,2) * 30000, end_time + .5, fp, unit_list);
+    end_time = saveRHDEpochToFile(ustruct, params.filename,...
+        selected_epochs_sec(i,1) + file_offset, ...
+        selected_epochs_sec(i,2) + file_offset, ...
+        params.fs_ephys, end_time + .5, fp, unit_list, i == 1);
 end
 
 clc

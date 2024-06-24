@@ -1,4 +1,11 @@
-function end_time = saveRHDEpochToFile(ustruct,rhdID,t_start,t_end,offset,fp,unit_list)
+function end_time = saveRHDEpochToFile(ustruct,rhdID,t_start,t_end,fs,offset,fp,unit_list,overwrite)
+
+if nargin < 7
+    overwrite = true;
+end
+
+t_start_s = seconds(t_start) * fs;
+t_end_s = seconds(t_end) * fs;
 
 validSessions = cellfun(@(x)any(strcmp(rhdID,x)),{ustruct.chainEPhysFile});
 
@@ -18,7 +25,7 @@ end
 for i = 1:length(sessionUnits)
     unit = sessionUnits(i);
     sessionUnits(i).spikeTimes = unit.spikeTimes(...
-        ismember(unit.spikeLabels,labels{i}) & iswithin(unit.spikeTimes,t_start,t_end))';
+        ismember(unit.spikeLabels,labels{i}) & iswithin(unit.spikeTimes,t_start_s,t_end_s))';
 end
 
 unitLabels_all = repelem(1:length(unitLabels), ...
@@ -27,7 +34,7 @@ unitLabels_all = repelem(1:length(unitLabels), ...
 spikeVec = double([ unitLabels_all' [sessionUnits.spikeTimes]' ]);
 
 output = spikeVec; 
-output(:,2) = (output(:,2) - min(output(:,2)))/30000 + .01 + offset;
+output(:,2) = (output(:,2) - min(output(:,2)))/fs + .01 + offset;
 output(:,2) = round(output(:,2),3);
 
 end_time = max(output(:,2));
@@ -38,7 +45,7 @@ if nargin < 6
     fp = fullfile(path,fname);
 end
 
-if exist(fp,'file')
+if ~overwrite
     writematrix(output,fp,'Delimiter','tab','WriteMode','append')
 else
     writematrix(output,fp,'Delimiter','tab')

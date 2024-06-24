@@ -9,20 +9,21 @@ lfp_norm = normalize(pwr_reduced,1,'norm');
 lfp_norm2 = lfp_norm(:,~artifact);
 
 %% Find the periods of delta
-rad = 60;
-st = strel('line',rad,90);
-st_open = strel('line',300,90);
-
 act_matched = acc_bin(1:length(artifact));
 acc_reduced = act_matched(~artifact);
 
 lfp_still = lfp_norm2(:,~acc_reduced);
 [~,s] = pca(lfp_still','NumComponents',30);
 options.MaxIter = 400;
-gmmodel = fitgmdist(s,5,'Options',options);
+gmmodel = fitgmdist(s,3,'Options',options);
 clusts = cluster(gmmodel,s);
 [vals,ord] = sort(clusts);
 
+cl = zeros(size(lfp_norm2,2),1);
+cl(~acc_reduced) = clusts;
+
+
+%% User selection of cluster
 f = figure;
 gcfFullScreen;
 subplot(3,1,1)
@@ -46,14 +47,20 @@ subplot(3,1,1)
 deltaClust = vals(round(x*60));
 close(f)
 
-cl = zeros(size(lfp_norm2,2),1);
-cl(~acc_reduced) = clusts;
+%% Cut out smaller epochs
 
-delta_bin = modefilt(cl,[29 1]) == deltaClust;
-delta_cl = imclose(delta_bin,st);
+rad_cl = 30;
+rad_op = 200;
+rad_artf = 20;
+
+st_cl = strel('line',rad_cl,90);
+st_open = strel('line',rad_op,90);
+st_artf = strel('line',rad_artf,90);
+
+delta_bin = modefilt(cl,[29 1],'replicate') == deltaClust;
+delta_cl = imclose(delta_bin,st_cl);
 delta_final = imopen(delta_cl,st_open);
 
-st_art = strel('line',20,90);
 delta = zeros(size(lfp,2),1); 
 delta(~artifact) = delta_final;
-delta = imclose(delta,st_art);
+delta = imclose(delta,st_artf);

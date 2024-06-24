@@ -1,40 +1,61 @@
-%% Set data to acquire
-deadEle = [13:16, 27:29, 31:33, 38,56,64];
-fs = 30000; %30kHz
+%% User params
+acq_start = duration(19,0,0); % start acquisition at this time (hours,minutes,seconds)
+acq_len = duration(4,0,0); % total length to acquire in hours,minutes,seconds
 
-t_start = 18; % start acquisition at this time (18:00 hours)
-t_len = 24; % total length to acquire in hours
+fs_ephys = 30000; %30kHz
+fs_acc = 300;
 
-t_offset = t_start - 14; % file starts at ~14:00
-offset = t_offset * fs * 3600; % converts to sample offset
+deadEle = [2, 3, 13:16, 27:29, 31:33, 38, 56, 64];
 
-read_length = t_len * 3600; % duration in seconds
-read_length_s = read_length * fs; % in samples
+%% Compute data to acquire
+[file,path] = uigetfile('Z:\Lab\forRudy\*.rhd','Select RHD file of interest:');
+[~,n] = fileparts(fullfile(path,file));
 
-chunkSize = 240; % read in 4 minute chunks
-chunkSize_s = chunkSize * fs; % convert to sample length
+file_start_date = tick2datetime(str2double(n));
+file_start_time = timeofday(file_start_date);
 
-shifts = 0 : chunkSize_s : read_length_s-chunkSize_s; % calculate offsets for each chunk
-shifts = shifts + offset; % add in the constant offset to start at the right time
+acq_offset = acq_start - file_start_time; % in hours
+acq_offset_s = seconds(acq_offset) * fs_ephys; % converts to sample offset
+   
+read_length = seconds(acq_len); % duration in seconds
+read_length_s = read_length * fs_ephys; % in samples
 
-filename = 'Z:\Lab\forRudy\637181493672024509.rhd';
+chunkSize = duration(0,4,0); % read in 4 minute chunks
+chunkSize_s = seconds(chunkSize) * fs_ephys; % convert to sample length
 
-if ~exist('data','var')
-    data = struct('acc',[],'ephys',[],'dio',[]);
+read_end = read_length_s - chunkSize_s; % calculate offsets for each chunk
+
+shifts = 0 : chunkSize_s : read_end; % calculate offsets for each chunk
+
+if shifts(end) ~= read_end
+    shifts(end+1) = read_end;
+end
+
+shifts = shifts + acq_offset_s; % add in the constant offset to start at the right time
+
+params = struct('acq_offset_s',acq_offset_s,'acq_offset_e',acq_offset_s + read_length_s,...
+        'fs_ephys',fs_ephys,'fs_ephys_ds',fs_ephys/100,'fs_acc',fs_acc,'filename',n);
+
+%% Initialize structs
+if exist('data','var') && ~isequal(data.params, params)
+    error('Params do not match existing struct!')
+elseif ~exist('data','var')
+    data = struct('acc',[],'ephys',[],'dio',[],'lastSave',0);
+    data.params = params;
 end
 
 acc = [];
 ephys = [];
 dio = [];
 
-t = 70; % initial guess for time to acquire chunk
+t = 60; % initial guess for time to acquire chunk
 saveEvery = 10; % save data every x chunks
 
 %% Acquire data
-for chk = 1:length(shifts)
+for chk = data.lastSave + 1 : length(shifts)
     
     % print out how far we are
-    clc
+    clc 
     fprintf('Loading chunk %d of %d. \nEstimated time remaining: %.1f minutes',...
         chk, length(shifts), mean(t(t~=0)) * (length(shifts) - chk + 1) / 60)
     
@@ -53,7 +74,12 @@ for chk = 1:length(shifts)
         clc
         fprintf('Saving data at shift %d\n',chk)
         data.lastSave = chk;
-        save('rhdData_24.mat','data','-v7.3');
+        save('rhdData_early.mat','data','-v7.3');
     end
     
 end
+
+clc
+fprintf('Saving final data \n')
+data.lastSave = chk;
+save('rhdData_early.mat','data','-v7.3');
