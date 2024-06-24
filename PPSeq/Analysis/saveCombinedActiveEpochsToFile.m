@@ -1,4 +1,4 @@
-function [output,times,units] = ...
+function [output,times,units_ignored] = ...
     saveCombinedActiveEpochsToFile(data,sessions,t_max,silent,ign_list)
 
 if nargin < 5
@@ -84,14 +84,13 @@ if isempty(spikeVec)
 end
 
 output = spikeVec;
-output(:,2) = round(output(:,2)) + .001;
-output(:,2) = output(:,2);
+output(:,2) = round(output(:,2),3) + .001;
 
 %% Check for duplicate units (Komolgrov-Smirnov test)
 
 % Run test on every pair of units
 pairs = nchoosek(unique(output(:,1)),2);
-for i = 1:length(pairs)
+for i = 1:size(pairs,1)
     [~,p(i)] = kstest2( ...
         output(output(:,1) == pairs(i,1), 2),...
         output(output(:,1) == pairs(i,2), 2));
@@ -117,8 +116,11 @@ if ~silent
     fp = fullfile(path,fname);
     writematrix(output,fp,'Delimiter','tab')
     fprintf(['\nSaved most active %d seconds of data from sessions %s to ''%s''. \n\n'...
+        'Number of duplicate units removed: %d\n'...
         '\nAverage background rate: %.1f\nNumber of units: %d\nNumber of total spikes: %d\n'],...
-        t_max,num2str(sessions), fp, length(output)/output(end,2),cnt,length(output))
+        t_max, num2str(sessions), fp, ...
+        length(unitsToDelete), ...
+        length(output) / output(end,2), cnt, length(output))
 
     [~,fname_noext] = fileparts(fp);
 

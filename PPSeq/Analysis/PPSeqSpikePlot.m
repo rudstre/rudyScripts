@@ -1,17 +1,30 @@
-function ord = PPSeqSpikePlot(ord,data,sessions,times,leverOffset,spikeOffset)
+function ord = PPSeqSpikePlot(ord,data,leverOffset,spikeOffset)
+
+if nargin < 4
+    spikeOffset = 0;
+end
+
+if nargin < 3
+    leverOffset = 0;
+end
 
 if nargin < 2
     plotLever = false;
-    spikeOffset = 0;
 else
     plotLever = true;
 end
 
-plotLever = true;
+if nargin < 1
+    ord = [];
+end
+
+[PPSeq,spike_info] = importPPSeqModel;
+
+% plotLever = true;
 gcfFullScreen;
 
 if plotLever
-    ax_lever = plotLeverPresses(data,sessions,times,leverOffset,1000);
+    [ax_lever,legend_lever] = plotLeverPresses(data,spike_info,leverOffset,1000);
 
     % Hack to be able to get two legends on the same figure
     ax_seq = copyobj(ax_lever, gcf); delete(get(ax_seq, 'Children'));
@@ -20,9 +33,6 @@ if plotLever
 else
     ax_seq = gca;
 end
-
-PPSeq = importPPSeqModel;
-% PPSeq = importPPSeqModel('~/Documents/PPSeq_fork.jl/ashesh_sleep');
 
 [~,idx] = ismember(PPSeq.assignments,PPSeq.events.assignment_id);
 
@@ -34,7 +44,7 @@ spikes(:,3) = PPSeq.events.type(idx);
 
 %% Reorder
 seqtypes = unique(spikes(:,3));
-seq_oi = [];
+seq_oi = [3,1];
 
 skip = [];
 evnts = PPSeq.events;
@@ -103,7 +113,6 @@ legend(ax_seq,legend_seq,'Location', 'northeast')
 set(ax_seq,'FontSize',18)
 
 if plotLever
-    legend_lever = {'center lever','left lever','right lever'};
     legend(ax_lever,legend_lever,'Location', 'southeast')
     set(ax_lever,'FontSize',18)
 end
@@ -112,8 +121,8 @@ xlim([0 30])
 ylim([0 max(spikes(:,1))])
 
 %% Plot event timestamps and warp
-eventsOI = iswithin(evnts.type, 8, 8);
-
-scatter(evnts.ts(eventsOI), ...
-    -1 * evnts.type(eventsOI), ...
-    1 * 100)
+% eventsOI = iswithin(evnts.type, 8, 8);
+% 
+% scatter(evnts.ts(eventsOI), ...
+%     -1 * evnts.type(eventsOI), ...
+%     1 * 100)

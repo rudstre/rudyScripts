@@ -3,7 +3,7 @@ function units = getNumGoodUnits(data,timeframe)
         timeframe = 600;
     end
     for i = 1:length(data)
-        spikes = saveMostActiveEpochToFile(data,i,timeframe,true);
+        spikes = saveCombinedActiveEpochsToFile(data,i,timeframe,true);
         units(i) = max(spikes(:,1));
     end
 end

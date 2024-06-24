@@ -1,8 +1,10 @@
-function PPSeq = importPPSeqModel(prefix)
+function [PPSeq, spike_info] = importPPSeqModel(prefix)
 
 if nargin == 0
-    prefix = 'C:\Users\rudygb\Documents\PPSeq_fork.jl';
+    prefix = uigetdir('~/Documents/PPSeq_fork.jl','Select folder');
 end
+
+load(fullfile(prefix,'spikes_info.mat'),'spike_info');
 
 PPSeq.spikes = readmatrix(fullfile(prefix,'spikes.txt'));
 PPSeq.assignments = readmatrix(fullfile(prefix,'assignments.txt'));
