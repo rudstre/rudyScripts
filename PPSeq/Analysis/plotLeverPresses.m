@@ -1,4 +1,4 @@
-function [ax,lgnd,leverOn,leverOff] = plotLeverPresses(data,spike_info,leverOffset,fs_lever)
+function [ax,lgnd,leverData] = plotLeverPresses(data,spike_info,leverOffset,fs_lever)
 
     if nargin < 5
         fs_lever = 1000;
@@ -102,7 +102,7 @@ function [ax,lgnd,leverOn,leverOff] = plotLeverPresses(data,spike_info,leverOffs
     xlim([0 30])
     ylim([0 1])
 
-    fullLegend = {'center lever','left lever','right lever'};
+    fullLegend = {'left lever','center lever','right lever'};
     lgnd = fullLegend(firstLevPlot ~= 0);
     
     ax = gca;

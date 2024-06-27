@@ -5,7 +5,7 @@ function good = seq2leverTest(PPSeq,leverData,sequence,leverOrd)
 
     t_start = seq_times(logical(validSeq));
 
-    endCandidates = find(validSeq) -1;
+    endCandidates = find(validSeq) - 1;
     validSeq_end = [endCandidates(2:end); length(validSeq)];
     t_end = seq_times(validSeq_end);
 

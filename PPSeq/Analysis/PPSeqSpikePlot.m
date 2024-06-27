@@ -1,4 +1,4 @@
-function ord = PPSeqSpikePlot(ord,data,leverOffset,spikeOffset)
+function [ord,PPSeq,leverData] = PPSeqSpikePlot(ord,data,leverOffset,spikeOffset)
 
 if nargin < 4
     spikeOffset = 0;
@@ -24,7 +24,7 @@ end
 gcfFullScreen;
 
 if plotLever
-    [ax_lever,legend_lever] = plotLeverPresses(data,spike_info,leverOffset,1000);
+    [ax_lever,legend_lever,leverData] = plotLeverPresses(data,spike_info,leverOffset,1000);
 
     % Hack to be able to get two legends on the same figure
     ax_seq = copyobj(ax_lever, gcf); delete(get(ax_seq, 'Children'));
