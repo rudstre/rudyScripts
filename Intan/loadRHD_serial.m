@@ -1,6 +1,6 @@
 %% User params
-acq_start = duration(19,0,0); % start acquisition at this time (hours,minutes,seconds)
-acq_len = duration(4,0,0); % total length to acquire in hours,minutes,seconds
+acq_start = datetime(2020,2,24,19,0,0); % start acquisition at this time (hours,minutes,seconds)
+acq_len = duration(24,0,0); % total length to acquire in hours,minutes,seconds
 
 fs_ephys = 30000; %30kHz
 fs_acc = 300;
@@ -12,9 +12,8 @@ deadEle = [2, 3, 13:16, 27:29, 31:33, 38, 56, 64];
 [~,n] = fileparts(fullfile(path,file));
 
 file_start_date = tick2datetime(str2double(n));
-file_start_time = timeofday(file_start_date);
 
-acq_offset = acq_start - file_start_time; % in hours
+acq_offset = acq_start - file_start_date; % in hours
 acq_offset_s = seconds(acq_offset) * fs_ephys; % converts to sample offset
    
 read_length = seconds(acq_len); % duration in seconds
@@ -33,8 +32,14 @@ end
 
 shifts = shifts + acq_offset_s; % add in the constant offset to start at the right time
 
-params = struct('acq_offset_s',acq_offset_s,'acq_offset_e',acq_offset_s + read_length_s,...
-        'fs_ephys',fs_ephys,'fs_ephys_ds',fs_ephys/100,'fs_acc',fs_acc,'filename',n);
+params = struct(...
+        'acq_offset_s', acq_offset_s, ...
+        'acq_offset_e', acq_offset_s + read_length_s, ...
+        'fs_ephys', fs_ephys, ...
+        'fs_ephys_ds', fs_ephys/100, ...
+        'fs_acc', fs_acc, ...
+        'filename', n...
+        );
 
 %% Initialize structs
 if exist('data','var') && ~isequal(data.params, params)
@@ -74,7 +79,7 @@ for chk = data.lastSave + 1 : length(shifts)
         clc
         fprintf('Saving data at shift %d\n',chk)
         data.lastSave = chk;
-        save('rhdData_early.mat','data','-v7.3');
+        save('rhdData_late_24.mat','data','-v7.3');
     end
     
 end
@@ -82,4 +87,4 @@ end
 clc
 fprintf('Saving final data \n')
 data.lastSave = chk;
-save('rhdData_early.mat','data','-v7.3');
+save('rhdData_late_24.mat','data','-v7.3');
