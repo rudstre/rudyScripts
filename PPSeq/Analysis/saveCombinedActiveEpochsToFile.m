@@ -1,7 +1,11 @@
 function [output,times,units_ignored] = ...
-    saveCombinedActiveEpochsToFile(data,sessions,t_max,silent,ign_list)
+    saveCombinedActiveEpochsToFile(data,sessions,t_max,silent,ign_list,removeDup)
 
-if nargin < 5
+if nargin < 6
+    removeDup = true;
+end
+
+if nargin < 5 || isempty(ign_list)
     ign_list = -1;
 end
 
@@ -88,28 +92,31 @@ output(:,2) = round(output(:,2),3) + .001;
 
 %% Check for duplicate units (Komolgrov-Smirnov test)
 
-% Run test on every pair of units
-pairs = nchoosek(unique(output(:,1)),2);
-for i = 1:size(pairs,1)
-    [~,p(i)] = kstest2( ...
-        output(output(:,1) == pairs(i,1), 2),...
-        output(output(:,1) == pairs(i,2), 2));
+unitsToDelete = [];
+if removeDup
+    % Run test on every pair of units
+    pairs = nchoosek(unique(output(:,1)),2);
+    for i = 1:size(pairs,1)
+        [~,p(i)] = kstest2( ...
+            output(output(:,1) == pairs(i,1), 2),...
+            output(output(:,1) == pairs(i,2), 2));
+    end
+
+    % Figure out which units to delete
+    duplUnits = pairs(p > .95,:);
+    unitsToDelete = duplUnits(:,2); % delete the second unit
+
+    % Delete unit
+    output(ismember(output(:,1),unitsToDelete),:) = [];
+    units_ignored = [units_ignored units(unitsToDelete)];
+    indices_ignored = [indices_ignored unitsToDelete];
+    units(unitsToDelete) = [];
+    cnt = cnt - length(unitsToDelete);
+
+    % Shift indices to accomodate for deleted units
+    ord_new = unique(output(:,1));
+    output(:,1) = arrayfun(@(x) find(ord_new == x),output(:,1));
 end
-
-% Figure out which units to delete
-duplUnits = pairs(p > .95,:);
-unitsToDelete = duplUnits(:,2); % delete the second unit
-
-% Delete unit
-output(ismember(output(:,1),unitsToDelete),:) = [];
-units_ignored = [units_ignored units(unitsToDelete)];
-indices_ignored = [indices_ignored unitsToDelete];
-units(unitsToDelete) = [];
-cnt = cnt - length(unitsToDelete);
-
-% Shift indices to accomodate for deleted units
-ord_new = unique(output(:,1));
-output(:,1) = arrayfun(@(x) find(ord_new == x),output(:,1));
 
 %% Save results and info
 if ~silent
