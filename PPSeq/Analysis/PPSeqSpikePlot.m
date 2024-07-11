@@ -20,11 +20,11 @@ end
 
 [PPSeq,spike_info] = importPPSeqModel;
 
-% plotLever = true;
+plotLever = true;
 gcfFullScreen;
 
 if plotLever
-    [ax_lever,legend_lever,leverData] = plotLeverPresses(data,spike_info,leverOffset,1000);
+    [ax_lever,legend_lever,leverData] = plotLeverPresses(data);
 
     % Hack to be able to get two legends on the same figure
     ax_seq = copyobj(ax_lever, gcf); delete(get(ax_seq, 'Children'));
@@ -36,15 +36,19 @@ end
 
 [~,idx] = ismember(PPSeq.assignments,PPSeq.events.assignment_id);
 
+spikeOffset = 0;
 spikes = PPSeq.spikes; spikes(:,2) = spikes(:,2) - spikeOffset;
 
 spikes(:,3) = PPSeq.events.type(idx);
+spikes(:,4) = PPSeq.events.warp(idx);
+spikes(:,5) = PPSeq.events.event_amp(idx);
 
-% spikes(:,4) = PPSeq.events.warp(idx);
+ts1 = 0; ts2 = seconds(hours(.5));
+spikes(~iswithin(spikes(:,2),ts1,ts2),:) = [];
 
 %% Reorder
 seqtypes = unique(spikes(:,3));
-seq_oi = [3,1];
+seq_oi = [2,3,1];
 
 skip = [];
 evnts = PPSeq.events;
@@ -85,7 +89,7 @@ col_mat = [0,0,0; ...
 
 for i = 1:length(seqtypes)
     seq = seqtypes(i);
-    spikesOI = spikes(:,3) == seq;
+    spikesOI = spikes(:,3) == seq & spikes(:,5) > 5;
     seq_spikes = spikes(spikesOI,1:2);
     hold on
     if ismember(seq,skip)

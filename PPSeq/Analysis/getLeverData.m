@@ -1,25 +1,33 @@
-function leverData = getLeverData(data,sessions,times,leverOffset,fs_lever)
+function leverData = getLeverData(data,times,fs_lever)
 
-    if nargin < 5
+    if nargin < 3
         fs_lever = 1000;
     end
+    
+    sessionStarts = datetime([data.sessionStartTime],'ConvertFrom','posix');
+    
+    for s = 1:size(times,1)
+        cur_session = find(iswithin(sessionStarts, times(s,1) - hours(1), times(s,2)));
+        cur_start = sessionStarts(cur_session);
+        cur_data = data(cur_session);
+        
+        leverOnDates = cur_start + seconds(cur_data.leverOnTimes / fs_lever);
+        leverOffDates = cur_start + seconds(cur_data.leverOffTimes / fs_lever);
 
-    dt = diff(times,1,2);
+        validOn = iswithin(leverOnDates, times(s,:)' + seconds([-1; 1]));
+        validLeverOn = leverOnDates(validOn);
+        firstLeverOff = find(leverOffDates > validLeverOn(1), 1);
+        onOffOffset = firstLeverOff - find(validOn,1);
+        validLeverOff = leverOffDates(find(validOn) + onOffOffset);
+        
+        leverOnSeconds = seconds(validLeverOn - times(s,1)); % change it to whatever unit
+        leverOffSeconds = seconds(validLeverOff - times(s,1));
 
-    for s = 1:length(sessions)
-        cur_session = sessions(s);
-        leverTimes = data(cur_session).leverOnTimes;
-        valid_on = iswithin(leverTimes/fs_lever, times(s,:)' + [-1; 1]);
-        leverData(s).onTimes = leverTimes(valid_on);
-
-        leverOff = data(cur_session).leverOffTimes;
-        off_start = find(leverOff - leverData(s).onTimes(1) > 0,1);
-        valid_diff = off_start - find(valid_on,1);
-        leverData(s).offTimes = leverOff(find(valid_on) + valid_diff);
-
-        leverData(s).onTimes = (leverData(s).onTimes - times(s,1)*fs_lever + sum(dt(1:s-1)))/fs_lever + leverOffset;
-        leverData(s).offTimes = (leverData(s).offTimes - times(s,1)*fs_lever + sum(dt(1:s-1)))/fs_lever + leverOffset;
-
-        leverData(s).leverCh = data(cur_session).leverCh(valid_on);
-        leverData.step = 'seconds';
+        leverData(s).onTimes = leverOnSeconds;
+        leverData(s).offTimes = leverOffSeconds;
+        leverData(s).session = cur_session;
+        leverData(s).startTime = cur_start;
+        leverData(s).leverCh = cur_data.leverCh(validOn);
+        leverData(s).unit = 'seconds';
     end
+    

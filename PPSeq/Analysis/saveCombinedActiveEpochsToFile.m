@@ -131,7 +131,7 @@ if ~silent
 
     [~,fname_noext] = fileparts(fp);
 
-    spike_info.times = times;
+    spike_info.times = seconds(times) + datetime([sessionData.sessionStartTime],'ConvertFrom','posix')';
     spike_info.units = units;
     spike_info.units_ignored = units_ignored;
     spike_info.indices_ignored = indices_ignored;
@@ -139,7 +139,7 @@ if ~silent
     spike_info.total_units = cnt;
     spike_info.total_spikes = length(output);
     spike_info.total_time = t_max;
-    spike_info.sessions = sessions;
+    spike_info.chain_ephys = unique({sessionData.chainEphysFile});
     save(fullfile(path,[fname_noext '_info']),'spike_info');
 end
 end

@@ -1,111 +1,113 @@
-function [ax,lgnd,leverData] = plotLeverPresses(data,spike_info,leverOffset,fs_lever)
+function [ax,lgnd,leverData] = plotLeverPresses(data)
 
-    if nargin < 5
-        fs_lever = 1000;
-    end
-    
-    alpha = .1;
+fs_lever = 1000;
 
-    sessions = spike_info.sessions;
-    numUnits = spike_info.total_units;
-    times = spike_info.times;
+alpha = .1;
 
-    %% Get lever data in right format
-    leverData = getLeverData(data,sessions,times,leverOffset,fs_lever);
+numUnits = 33;%spike_info.total_units;
+times = datetime(2020,2,24,19,0,0) + hours([0 .5]);%spike_info.times;
 
-    leverOn = arrayfun(@(lvDat) arrayfun(@(lvNum) ...
-        lvDat.onTimes(lvDat.leverCh == lvNum), ...
-        1:3,'uni',false),leverData,'uni',false);
-    leverOff = arrayfun(@(lvDat) arrayfun(@(lvNum) ...
-        lvDat.offTimes(lvDat.leverCh == lvNum), ...
-        1:3,'uni',false),leverData,'uni',false);
+%% Get lever data in right format
+leverData = getLeverData(data,times,fs_lever);
+shifts = [0,arrayfun(@max,[leverData.onTimes])];
+
+leverOn = arrayfun(@(lvDat) arrayfun(@(lvNum) ...
+    lvDat.onTimes(lvDat.leverCh == lvNum), ...
+    1:3,'uni',false),leverData,'uni',false);
+leverOff = arrayfun(@(lvDat) arrayfun(@(lvNum) ...
+    lvDat.offTimes(lvDat.leverCh == lvNum), ...
+    1:3,'uni',false),leverData,'uni',false);
 
 
-    %% Plot lever data
+%% Plot lever data
 
-    % Initialize vars
-    firstLevPlot = [0,0,0];
-    startIdxs = ones(length(sessions),3);
+% Initialize vars
+firstLevPlot = [0,0,0];
+startIdxs = ones(length(leverData),3);
 
-    % What lever colors do you want
-    line_cols = {[0,1,0],[1,0,0],[0,0,1]}; % Left = Green, Center = Red, Right = Blue
+% What lever colors do you want
+line_cols = {[0,1,0],[1,0,0],[0,0,1]}; % Left = Green, Center = Red, Right = Blue
 
-    % Plot one datapoint from each lever first so that legend makes sense
-    for s = 1:length(sessions)
-        for levType = 1:3
-            curLever = leverOn{s}{levType};
+% Plot one datapoint from each lever first so that legend makes sense
+for s = 1:length(leverData)
+    for levType = 1:3
+        curLeverOn = leverOn{s}{levType} + shifts(s);
+        curLeverOff = leverOff{s}{levType} + shifts(s);
 
-            % If data from lever exists, plot first one
-            if ~isempty(curLever) 
+        % If data from lever exists, plot first one
+        if ~isempty(curLeverOn)
 
-                % Get bounds of first lever press
-                firstLeverZone = [leverOn{s}{levType}(1); ...
-                    leverOff{s}{levType}(1) - leverOn{s}{levType}(1)];
+            % Get bounds of first lever press
+            firstLeverZone = [curLeverOn(1); ...
+                curLeverOff(1) - curLeverOn(1)];
 
-                % Generate visual rectangle for lever press
-                rectangle('Position', [firstLeverZone(1), -1, firstLeverZone(2), numUnits + 1],...
-                    'FaceColor', [line_cols{levType}, alpha], 'EdgeColor', [1,1,1])
+            % Generate visual rectangle for lever press
+            rectangle('Position', [firstLeverZone(1), -1, firstLeverZone(2), numUnits + 1],...
+                'FaceColor', [line_cols{levType}, alpha], 'EdgeColor', [1,1,1])
 
-                % Rectangle datatype does not appear in legend, so you have to plot
-                % an invisible line as well for it to show up
-                hold on
-                line(NaN, NaN, 'LineWidth', 2, 'Color', [line_cols{levType} alpha + .2]);
-                
-                % Keep track of the fact that first lever press was plotted
-                firstLevPlot(levType) = 1;
-                startIdxs(s,levType) = startIdxs(s,levType) + 1;
-                
+            % Rectangle datatype does not appear in legend, so you have to plot
+            % an invisible line as well for it to show up
+            hold on
+            line(NaN, NaN, 'LineWidth', 2, 'Color', [line_cols{levType} alpha + .2]);
+
+            % Keep track of the fact that first lever press was plotted
+            firstLevPlot(levType) = 1;
+            startIdxs(s,levType) = startIdxs(s,levType) + 1;
+
             % If there is no lever press of this type, make note
-            else
-                startIdxs(s,levType) = 0;
-            end
+        else
+            startIdxs(s,levType) = 0;
+        end
 
-            % If one lever of each type has been plotted, stop
-            if all(firstLevPlot) 
-                break
-            end
+        % If one lever of each type has been plotted, stop
+        if all(firstLevPlot)
+            break
+        end
 
+    end
+end
+
+% Plot all other lever presses
+for s = 1:length(leverData)
+    for levType = 1:3
+        % Get lever on and lever off times for current lever type
+        curLeverOn = leverOn{s}{levType} + shifts(s);
+        curLeverOff = leverOff{s}{levType} + shifts(s);
+
+        % Skip lever type if it does not exist for this session
+        if isempty(curLeverOn)
+            continue
+        end
+
+        % Get other lever press bounds
+
+        % If the first session is being plotted, make sure to start at
+        % the right starting index (dont re-plot first lever press)
+        if s == 1
+            leverZones = [curLeverOn(startIdxs(levType):end); ...
+                curLeverOff(startIdxs(levType):end)]';
+        else
+            leverZones = [curLeverOn; curLeverOff]';
+        end
+
+        % Plot rectangles
+        for l = 1:size(leverZones,1)
+            rectangle('Position',...
+                [leverZones(l,1), -1, leverZones(l,2) - leverZones(l,1), 101],...
+                'FaceColor',[line_cols{levType} alpha],...
+                'EdgeColor',[1,1,1])
         end
     end
+end
 
-    % Plot all other lever presses
-    for s = 1:length(sessions)
-        for levType = 1:3
-            % Get lever on and lever off times for current lever type
-            data_on = leverOn{s}{levType};
-            data_off = leverOff{s}{levType};
+% Set axis, legend, etc
+xlim([0 30])
+ylim([0 1])
 
-            % Skip lever type if it does not exist for this session
-            if isempty(data_on)
-                continue
-            end
+fullLegend = {'left lever','center lever','right lever'};
+lgnd = fullLegend(firstLevPlot ~= 0);
 
-            % Get other lever press bounds
-
-            % If the first session is being plotted, make sure to start at
-            % the right starting index (dont re-plot first lever press)
-            if s == 1
-                leverZones = [data_on(startIdxs(levType):end); data_off(startIdxs(levType):end)]';
-            else
-                leverZones = [data_on; data_off]';
-            end
-
-            % Plot rectangles
-            for l = 1:size(leverZones,1)
-                rectangle('Position',[leverZones(l,1),-1,leverZones(l,2)-leverZones(l,1),101],...
-                    'FaceColor',[line_cols{levType} alpha],'EdgeColor',[1,1,1])
-            end
-        end
-    end
-
-    % Set axis, legend, etc
-    xlim([0 30])
-    ylim([0 1])
-
-    fullLegend = {'left lever','center lever','right lever'};
-    lgnd = fullLegend(firstLevPlot ~= 0);
-    
-    ax = gca;
+ax = gca;
 
 end
 
