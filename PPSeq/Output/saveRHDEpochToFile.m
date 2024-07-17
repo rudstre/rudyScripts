@@ -1,8 +1,11 @@
-function end_time = saveRHDEpochToFile(ustruct,rhdID,t_start,t_end,fs,offset,fp,unit_list,overwrite)
+function end_time = saveRHDEpochToFile(ustruct,rhdID,start_time,t_len,fs,offset,fp,unit_list,overwrite)
 
-if nargin < 7
+if nargin < 9
     overwrite = true;
 end
+
+[t_start, rhdID] = getOffsetFromRHDStart(start_time,rhdID);
+t_end = t_start + t_len;
 
 t_start_s = seconds(t_start) * fs;
 t_end_s = seconds(t_end) * fs;
@@ -34,12 +37,12 @@ unitLabels_all = repelem(1:length(unitLabels), ...
 spikeVec = double([ unitLabels_all' [sessionUnits.spikeTimes]' ]);
 
 output = spikeVec; 
-output(:,2) = (output(:,2) - min(output(:,2)))/fs + .01 + offset;
+output(:,2) = output(:,2)/fs - seconds(t_start) + offset;
 output(:,2) = round(output(:,2),3);
 
 end_time = max(output(:,2));
 
-if nargin < 6
+if nargin < 7 || isempty(fp)
     [fname,path] = uiputfile('*.txt','Select save location',...
         '/Users/rudygelb-bicknell/Documents/PPSeq_fork.jl/demo/data/');
     fp = fullfile(path,fname);
