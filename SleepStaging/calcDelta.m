@@ -1,29 +1,33 @@
-function [delta,normalizedLFP,lfpFrequencies,clusterMode] = calcDelta(pwrSpectrum,frequencies,activePeriods,artifact)
+function [behavStates_final,normalizedLFP_banded,lfpFrequencies] = calcDelta(lfp_full,lfp_banded,frequencies,activePeriods,artifact)
 %% Define sizes
-fullSpectrumLength = size(pwrSpectrum,2);
 noArtifactLength = nnz(~artifact);
 
 %% Compute the normalized frequency distribution
-isLFPFrequency = iswithin(frequencies, 1, 9.5);
+isLFPFrequency = iswithin(frequencies, 0, 30.5);
 lfpFrequencies = frequencies(isLFPFrequency);
-lfp = pwrSpectrum(isLFPFrequency,:);
+lfp_cut = lfp_full(isLFPFrequency,:);
+lfp_banded_cut = lfp_banded(isLFPFrequency,:);
 
-normalizedLFP = normalize(lfp,1,'norm');
+normalizedLFP = normalize(lfp_cut,1,'norm');
 normalizedLFP_real = normalizedLFP(:,~artifact); % no artifacts
+
+normalizedLFP_banded = normalize(lfp_banded_cut,1,'norm');
+normalizedLFP_banded_real = normalizedLFP_banded(:,~artifact); % no artifacts
 
 %% Get only parts of LFP that were during inactive periods
 activePeriods_real = activePeriods(~artifact); % No artifacts
 inactiveLFP = normalizedLFP_real(:,~activePeriods_real); % No artifacts, no movement
+inactiveLFP_banded = normalizedLFP_banded_real(:,~activePeriods_real);
 
 %% Find periods of delta in this set
-[~,LFP_pca] = pca(inactiveLFP','NumComponents',4);
+[~,LFP_pca] = pca(inactiveLFP_banded','NumComponents',3);
 
 % Fit 3 component GMM
 
 f = figure;
 gcfFullScreen;
 
-numClusts = 6;
+numClusts = 4;
 clusters = generateClusters(LFP_pca,numClusts);
 
 char_press = 0;
@@ -50,7 +54,7 @@ while true
     %% Plot LFP and clusters
 
     % Plot LFP
-    sortedClusters = plotLFP(inactiveLFP,lfpFrequencies,clusters);
+    sortedClusters = plotLFP(inactiveLFP_banded,lfpFrequencies,clusters);
 
     title(sprintf('done! (%d clusters)', numClusts))
     waitforbuttonpress;
@@ -58,56 +62,42 @@ while true
 end
 
 %% User selection of cluster corresponding to delta
-hold on
-deltaClusts = [];
-while true
-    [x,~] = ginput(1);
-    if isempty(x)
-        break
-    end
-    curClust = sortedClusters(round(x * 60));
-    deltaClusts = unique([deltaClusts curClust]);
-    current_epoch = [round(find(sortedClusters == curClust, 1, 'first') / 60) round(find(sortedClusters == curClust, 1, 'last') / 60)];
-    rectangle('Position', [current_epoch(1), 0, current_epoch(2) - current_epoch(1), curClust], 'FaceColor', [0 0 1 .7])
-    drawnow;
-end
+sleepStates = clusters;
 
-% close(f)
+% stateArray = [1 1.5 2 2.5 3];
+
+[x,~] = ginput(3);
+clustsOfInterest = sortedClusters(round(x * 60));
+indicesOfInterest = ismember(sleepStates,clustsOfInterest);
+samplesOfInterest = clusters(indicesOfInterest);
+sleepStates(~indicesOfInterest) = nan;
+[~,sleepStates(indicesOfInterest)] = ismember(samplesOfInterest,clustsOfInterest);
+% sleepStates(indicesOfInterest) = stateArray(rawStates);
+close(f)
 
 %% Cut out smaller epochs
 
 % Put these into the larger array that includes movement (these samples are
 % in cluster 0)
-clusters_full = zeros(noArtifactLength, 1);
-clusters_full(~activePeriods_real) = clusters;
+behavStates = zeros(size(normalizedLFP,2), 1);
+behavStates(~activePeriods & ~artifact') = sleepStates;
+behavStates(activePeriods) = 0;
+behavStates(artifact) = nan;
 
-clusterCloseRadius = 30;
-deltaOpenRadius = 200; % Must be in NREM for at least  3.5 min
-artifactCloseRadius = 20;
+behavStates = fillmissing(behavStates,"previous");
 
-strl.clusterCloseRadius = strel('line',clusterCloseRadius,90);
-strl.deltaOpenRadius = strel('line',deltaOpenRadius,90);
-strl.artifactCloseRadius = strel('line',artifactCloseRadius,90);
+behavStates_final = modefilt(behavStates, [9 1], 'replicate');
 
-clusterMode = modefilt(clusters_full, [29 1], 'replicate');
-deltaClust_modefilt = ismember(clusterMode, deltaClusts);
-deltaClust_postClose = imclose(deltaClust_modefilt, strl.clusterCloseRadius);
-deltaClust_postOpen = imopen(deltaClust_postClose,strl.deltaOpenRadius);
-
-% Puts in larger array that includes artifact samples and then closes
-% binary so that artifact samples can be included in delta
-delta = zeros(fullSpectrumLength, 1);
-delta(~artifact) = deltaClust_postOpen;
-delta = imclose(delta, strl.artifactCloseRadius);
 
 function clusters = generateClusters(data,numClusts)
 
 title('calculating clusters...')
 drawnow;
 
-options.MaxIter = 400;
+options.MaxIter = 1500;
 gmmodel = fitgmdist(data,numClusts,'Options',options);
 clusters = cluster(gmmodel,data);
+
 
 function clusters = splitCluster(data,clusters,clusterToSplit)
 indicesOfInterest = find(clusters == clusterToSplit);
