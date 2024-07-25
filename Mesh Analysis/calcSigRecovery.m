@@ -1,19 +1,43 @@
-fc_acc = [395 415];
-fs_acc = 20000;
-[b_acc, a_acc] = butter(2, fc_acc / (fs_acc / 2), 'bandpass'); % 4th order
-dat_filt = filter(b_acc ,a_acc, data,[],2);
-ma = movmax(dat_filt,.5*20000,2);
-mi = movmin(dat_filt,.5*20000,2);
-pp = ma-mi;
-rec = pp/500;
-rec = mean(rec,2);
+function [goodSignal, percentageAlive, recoveryMean] = calcSigRecovery(data, impedances, goodIndices_start, goodIndices_end)
+    % Calculate signal recovery metrics and percentage of alive signals based on impedance
+    %
+    % Inputs:
+    %   data: Matrix of signal data (channels x samples)
+    %   impedances: Array of impedance values for each channel
+    %   goodIndices: Indices of channels considered good
+    %
+    % Outputs:
+    %   goodSignal: Array indicating good signal channels
+    %   percentageAlive: Array of mean percentages of alive signals for each impedance range
+    %   recoveryMean: Mean recovery value for each channel
 
-titlt
+    % Bandpass filter settings
+    fc_bandpass = [395 415]; % Frequency range in Hz
+    fs = 20000; % Sampling frequency
+    [b_bandpass, a_bandpass] = butter(2, fc_bandpass / (fs / 2), 'bandpass'); % 2nd-order Butterworth filter
 
-pr = [];
-for i = 0:15:2000
-    idxs = iswithin(imp2(gi2)/1e3,i-50,i+50);
-    gs = gi_still(idxs);
-    pr(end+1) = mean(gs);
+    % Filter the data using the bandpass filter
+    filteredData = filter(b_bandpass, a_bandpass, data, [], 2);
+
+    % Calculate the peak-to-peak amplitude using moving maximum and minimum
+    movingMax = movmax(filteredData, 0.5 * fs, 2);
+    movingMin = movmin(filteredData, 0.5 * fs, 2);
+    peakToPeak = movingMax - movingMin;
+
+    % Calculate recovery metric and average it across samples
+    recovery = peakToPeak / 500;
+    recoveryMean = mean(recovery, 2);
+
+    % Initialize the results
+    percentageAlive = [];
+
+    % Calculate the mean recovery percentage for each impedance range
+    for i = 0:15:2000
+        % Determine indices for current impedance range
+        impedanceIndices = iswithin(impedances(goodIndices_start) / 1e3, i - 50, i + 50);
+
+        % Calculate good signal channels for current range
+        goodSignal = goodIndices_end(impedanceIndices);
+        percentageAlive(end + 1) = mean(goodSignal);
+    end
 end
-

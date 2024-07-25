@@ -5,7 +5,7 @@ fs_lever = 1000;
 alpha = .1;
 
 numUnits = 33;%spike_info.total_units;
-times = datetime(2020,2,24,19,0,0) + hours([0 .5]);%spike_info.times;
+times = datetime(2020,2,24,19,0,0) + hours([7.5 8.5]);%spike_info.times;
 
 %% Get lever data in right format
 leverData = getLeverData(data,times,fs_lever);

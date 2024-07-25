@@ -1,21 +1,26 @@
+% Import trial data
 importTrialData;
 
+% Prompt user to select the output folder containing .txt files
+outputFolder = uigetdir('~/*.txt', 'Select output folder');
 
-pn = uigetdir('~/*.txt','Select output folder');
-hyperparameters = readmatrix(fullfile(pn,'results/hyperparameters.txt'));
+% Read hyperparameters and hyperlist from the specified files
+hyperparameters = readmatrix(fullfile(outputFolder, 'results/hyperparameters.txt'));
+hyperlist = readmatrix(fullfile(outputFolder, 'hyperlist.txt'));
 
-hyperlist = readmatrix(fullfile(pn,'hyperlist.txt'));
-[~,idx_unq] = unique(hyperparameters(:,1:5),'rows');
-dupRows = setdiff(1:size(hyperparameters,1), idx_unq);
-hyperparameters(dupRows,:) = [];
+% Identify unique hyperparameters and remove duplicates
+[~, uniqueIdx] = unique(hyperparameters(:, 1:5), 'rows');
+duplicateRows = setdiff(1:size(hyperparameters, 1), uniqueIdx);
+hyperparameters(duplicateRows, :) = [];
 
-[~,idx] = ismember(hyperparameters(:,1:5),hyperlist,'rows');
+% Match unique hyperparameters with the hyperlist
+[~, idx] = ismember(hyperparameters(:, 1:5), hyperlist, 'rows');
 
-hyperparams = zeros([length(hyperlist) 7]);
-hyperparams(:,1:5) = hyperlist;
-hyperparams(idx,6:7) = hyperparameters(:,6:7);
+% Initialize the final matrix for storing hyperparameters and results
+hyperparams = zeros(length(hyperlist), 7);
+hyperparams(:, 1:5) = hyperlist;
+hyperparams(idx, 6:7) = hyperparameters(:, 6:7);
 
-[~,ord] = sort(hyperparams(:,7),'descend');
-
-hyperparams_sorted = hyperparams(ord,:);
-
+% Sort hyperparameters based on the 7th column in descending order
+[~, ord] = sort(hyperparams(:, 7), 'descend');
+hyperparams_sorted = hyperparams(ord, :);
