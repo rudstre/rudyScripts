@@ -1,4 +1,9 @@
 function epochs = findEpochsFromBinary(bin)
+
+if size(bin,2) == 1
+    bin = bin';
+end
+
 epochStarts = find(diff(bin) == 1) + 1;
 epochEnds = find(diff(bin) == -1);
 
