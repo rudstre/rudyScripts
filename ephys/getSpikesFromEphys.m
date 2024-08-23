@@ -1,4 +1,37 @@
 function [spikeWaveforms, thresholds] = getSpikesFromEphys(signalData, thresholdMultiplier, detectionDirection, timeWindow)
+%GETSPIKESFROMEPHYS Detects and extracts spike waveforms from ephys signal data.
+%
+%   [spikeWaveforms, thresholds] = GETSPIKESFROMEPHYS(signalData, thresholdMultiplier, detectionDirection, timeWindow)
+%   detects spikes in the given ephys signal data based on a threshold derived
+%   from the median absolute deviation (MAD). The function extracts the waveforms
+%   around each detected spike and returns them along with the computed thresholds.
+%
+%   Inputs:
+%   - signalData: Matrix (2D array) where each column represents data from a 
+%     different channel of ephys signal.
+%   - thresholdMultiplier (optional): A scalar that multiplies the MAD to set 
+%     the detection threshold for spikes. Default is 5.
+%   - detectionDirection (optional): String specifying the direction for spike 
+%     detection. Options are 'pos' or 'positive' or '+' for positive spikes, and 
+%     'neg' or 'negative' or '-' for negative spikes. Default is '-'.
+%   - timeWindow (optional): Vector specifying the time window around the spike 
+%     to extract waveforms, given in milliseconds. Default is [-0.5, 1].
+%
+%   Outputs:
+%   - spikeWaveforms: Cell array where each cell contains a matrix of detected 
+%     spike waveforms for a corresponding channel.
+%   - thresholds: Vector containing the detection thresholds computed for each 
+%     channel based on the MAD and thresholdMultiplier.
+%
+%   Example:
+%   [spikeWaveforms, thresholds] = GETSPIKESFROMEPHYS(signalData, 4, 'pos', [-1, 2]);
+%
+%   This example detects positive spikes in 'signalData' using a threshold 
+%   multiplier of 4 and extracts waveforms within a time window from -1 ms to 2 ms 
+%   around each spike.
+%
+%   Author: [Your Name]
+%   Date: [Date]
 
 %% Input checking and default values
 % Set default values if arguments are not provided

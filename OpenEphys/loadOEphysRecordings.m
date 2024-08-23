@@ -66,7 +66,6 @@ for nodeIdx = nodeIndices
         % Initialize an empty array to store data for the current recording.
         data_rec = [];
 
-
         % Binary files are stored in little-endian format (uint16). Need to convert
         % to uV
         bitVolts = extractBitVolts(recording_paths(recIdx));
