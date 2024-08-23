@@ -1,0 +1,31 @@
+function data_filtered = easyfilt(data,fs,fc,type,ord)
+
+if nargin < 5
+    ord = 2; 
+end
+
+switch type
+    case {'high', 'highpass'}
+        type = 'high';
+        if length(fc) ~= 1
+            error('Highpass filter needs one frequency!')
+        end
+    case {'low', 'lowpass'}
+        type = 'low';
+        if length(fc) ~= 1
+            error('Lowpass filter needs one frequency!')
+        end
+    case {'band', 'bandpass'}
+        type = 'bandpass';
+        if length(fc) ~= 2
+            error('Bandpass filter needs two frequencies!')
+        end
+    case {'stop', 'bandstop'}
+        type = 'stop';
+        if length(fc) ~= 2
+            error('Bandstop filter needs two frequencies!')
+        end
+end
+
+[b,a] = butter(ord/2,fc/(fs/2),type);
+data_filtered = filter(b,a,data,[],2;

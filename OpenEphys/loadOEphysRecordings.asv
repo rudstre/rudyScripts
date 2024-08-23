@@ -1,0 +1,53 @@
+function data = loadOEphysRecordings(path)
+
+% Define path to the recording
+if nargin == 0
+    path = uigetdir();
+end
+
+% Create a session (loads all data from the most recent recording)
+session = Session(path);
+
+recordNodes_struct = [session.recordNodes{:}];
+
+if length(recordNodes_struct) ~= 1
+    nodeIndices = listdlg('ListString',{recordNodes_struct.name});
+else
+    nodeIndices = 1;
+end
+
+% Iterate over the record nodes to access data
+for nodeIdx = nodeIndices
+    node = session.recordNodes{nodeIdx};
+
+    recordings_struct = [node.recordings{:}];
+
+    if length(recordings_struct) ~= 1
+        recording_paths = string({recordNodes_struct.name});
+        recording_paths = extractBefore(recording_paths, strlength(recording_paths));
+        [~,recording_names] = fileparts(recording_paths);
+        recIndices = listdlg('ListString',cellstr(recording_names));
+    else
+        recIndices = 1;
+    end
+    data_node = [];
+    for recIdx = recIndices
+
+        % 1. Get the first recording
+        recording = node.recordings{1,recIdx};
+
+        % 2. Iterate over all continuous data streams in the recording
+        streamNames = recording.continuous.keys();
+        data_rec = [];
+        for k = 1:length(streamNames)
+
+            streamName = streamNames{k};
+            disp(streamName)
+
+            % Get the continuous data from the current stream
+            data_rec(end+1).data = recording.continuous(streamName);
+            data_rec(end).stream = streamName;
+        end
+        data_node(end+1) = data_rec;
+    end
+end

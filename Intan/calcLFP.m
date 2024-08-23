@@ -24,8 +24,8 @@ function [lfpFull, lfpBanded, artifact, frequencies] = calcLFP(data, startTime, 
     endSample = seconds(endTime) * samplingRate;
 
     % Calculate window parameters in samples
-    winStepSeconds = 1;
-    winLengthSeconds = 2;
+    winStepSeconds = 2;
+    winLengthSeconds = 10;
 
     winLengthSamples = winLengthSeconds * samplingRate;
     winStepSamples = winStepSeconds * samplingRate; % window steps in 1 second increments
@@ -46,7 +46,7 @@ function [lfpFull, lfpBanded, artifact, frequencies] = calcLFP(data, startTime, 
         fprintf('Calculating LFP for channel %d of %d\n', ch, size(ephysData, 1));
         
         [~, frequencies, timeStamps, pwrSpectrum(:,:,end + 1)] = spectrogram(ephysData(ch, startSample:endSample), ...
-            winLengthSamples, winLengthSamples - winStepSamples, 1:1:15, samplingRate, 'yaxis');
+            winLengthSamples, winLengthSamples - winStepSamples, .1:.5:10, samplingRate, 'yaxis');
     end
 
     %% Artifact rejection
@@ -74,9 +74,9 @@ function [lfpFull, lfpBanded, artifact, frequencies] = calcLFP(data, startTime, 
 
     % Define frequency bands
     bands = [...
-        1, 4; ...
-        4, 9; ...
-        10, 14 ...
+        .5, 4; ...
+        4, 5; ...
+        5, 10; ...
         ];
 
     freqIndices = iswithin(frequencies, bands');

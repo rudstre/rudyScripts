@@ -35,7 +35,7 @@ function [legend_cell, ax, behavSummary] = plotBehavioralSummary(behavStates, he
     cols = [0 0 0; distinguishable_colors(max(behavStates), [1 1 1; 0 0 0])];
 
     % Generate behavioral summary with 60-second bins
-    behavSummary = getBehavioralSummary(behavStates, 60);
+    behavSummary = getBehavioralSummary(behavStates, 5);
 
     % Determine division factor for time axis (1 for seconds, 3600 for hours)
     div = hrs * 3600 + ~hrs * 1;

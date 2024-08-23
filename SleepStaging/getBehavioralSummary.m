@@ -12,7 +12,7 @@ function behavSummary = getBehavioralSummary(behavStates, filterLength)
 
     % Calculate the moving average percentage for each state
     for state = 1:max(behavStates)
-        statePerc(:, state + 1) = movmean(behavStates == state, filterLength);
+        statePerc(:, state + 1) = movmean(double(behavStates == state), filterLength, 'Endpoints', 'fill');
     end
 
     behavSummary = NaN(size(behavStates)); % Initialize summary with NaN
