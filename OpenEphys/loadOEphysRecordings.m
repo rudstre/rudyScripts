@@ -83,6 +83,7 @@ for nodeIdx = nodeIndices
         % Store the recording data in the node's data structure.
         data_node(end+1).recording = data_rec;
         data_node(end).name = recording_names(recIdx);  % Store the recording name.
+        data_node(end).signalChain = extractSignalChain(recording_paths(recIdx));
     end
     
     % Store the node's data in the main data structure.
