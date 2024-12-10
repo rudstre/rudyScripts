@@ -34,16 +34,19 @@ switch type
         filterChain(2).type = 'notch';
         filterChain(2).fc = f_line;
     case 'ephys'
-        filterChain(1).type = 'bandpass';
-        filterChain(1).fc = [300 6000];
-        filterChain(2).type = 'notch';
-        filterChain(2).fc = f_line;
+        filterChain(1).type = 'avg';
+        filterChain(2).type = 'bandpass';
+        filterChain(2).fc = [300 6000];
+        filterChain(3).type = 'notch';
+        filterChain(3).fc = f_line;
 end
 
 % Apply each filter in the signal chain
 for f = 1:length(filterChain)
     currentFilter = filterChain(f);
     switch currentFilter.type
+        case 'avg'
+            data = data - median(data,1);
         case {'band', 'bandpass', 'high', 'highpass', 'low', 'lowpass'}
             data = easyfilt(data, fs, currentFilter.fc, currentFilter.type);
         case 'notch'

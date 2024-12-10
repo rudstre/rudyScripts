@@ -1,4 +1,4 @@
-function tset(input,sz)
+function textsize(input,sz)
 
 if nargin < 2
     sz = 18;

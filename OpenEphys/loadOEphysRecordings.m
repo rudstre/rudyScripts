@@ -63,20 +63,39 @@ for nodeIdx = nodeIndices
         % Get the names of all continuous data streams in the current recording.
         streamNames = recording.continuous.keys();
 
-        % Initialize an empty array to store data for the current recording.
-        data_rec = [];
-
-        % Binary files are stored in little-endian format (uint16). Need to convert
-        % to uV
+        % Binary files are stored in little-endian format (int16). Need to convert
+        % to physical units using bitVolts.
         bitVolts = extractBitVolts(recording_paths(recIdx));
 
         % Iterate over each continuous data stream.
+        data_rec = [];  % Initialize data_rec for each recording
         for k = 1:length(streamNames)
             streamName = streamNames{k};  % Get the name of the current data stream.
 
-            % Retrieve the continuous data from the current stream and store it.
-            data_rec(end+1).data = recording.continuous(streamName);
-            data_rec(end).data.samples = double(data_rec(end).data.samples) * bitVolts;
+            % Retrieve the continuous data from the current stream.
+            data_struct = recording.continuous(streamName);
+            data_samples = double(data_struct.samples);
+
+            % Ensure bitVolts has the same number of elements as the number of channels.
+            numChannels = size(data_samples, 1);
+
+            % Handle cases where bitVolts does not match the number of channels.
+            if numel(bitVolts) == 1
+                bitVolts_channel = repmat(bitVolts, numChannels, 1);
+            elseif numel(bitVolts) == numChannels
+                bitVolts_channel = bitVolts(:);  % Ensure it's a column vector
+            else
+                error('The number of bitVolts values (%d) does not match the number of channels (%d).', numel(bitVolts), numChannels);
+            end
+
+            % Multiply each channel's data by its corresponding bitVolts.
+            for ch = 1:numChannels
+                data_samples(ch, :) = data_samples(ch, :) * bitVolts_channel(ch);
+            end
+
+            % Store the scaled data back into your data structure.
+            data_struct.samples = data_samples;
+            data_rec(end+1).data = data_struct;
             data_rec(end).stream = streamName;  % Store the stream name.
         end
 
