@@ -1,4 +1,4 @@
-function spikeTrainCorrelation(opt, wid, w_tot)
+function spikeTrainCorrelation(optPath, wid, w_tot)
     % Spike train cross-correlation analysis with z-score calculation
     % Args:
     %   opt: Options structure containing analysis parameters and paths
@@ -6,7 +6,7 @@ function spikeTrainCorrelation(opt, wid, w_tot)
     %   w_tot: Total number of workers
 
     % Unpack options
-    opt = opt.opt;
+    opt = load(optPath).opt;
     pairs = opt.pairs;
     binning = opt.binning;
     central_window = opt.central_window;
