@@ -58,6 +58,13 @@ for pair_num = 1:size(pairs, 1)
     workerPrint('Progress: Pair %d of %d\n', pair_num, size(pairs, 1));
     pair = pairs(pair_num, :);
 
+    % Log memory usage periodically
+    if mod(pair_num, 10) == 0 % Log every 10 pairs
+        runtime = java.lang.Runtime.getRuntime();
+        usedMemory = (runtime.totalMemory() - runtime.freeMemory()) / 1e6; % Convert to MB
+        workerPrint('Memory Usage: %.2f MB\n', usedMemory);
+    end
+
     % Validate pair indices
     if any(pair > length(spikesFile.spikes))
         workerPrint('Invalid pair indices. Skipping pair: [%d, %d]\n', pair(1), pair(2));
