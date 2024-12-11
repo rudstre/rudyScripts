@@ -150,8 +150,8 @@ try
         workerPrint('Using cached spikes for unit %d\n', unit);
     else
         % Load spike train from file
-        spikes = spikesFile.spikes(unit,1);
-        spikeCache(unit) = spikes{:};
+        spikes = spikesFile.spikes(unit,1); spikes = spikes{:};
+        spikeCache(unit) = spikes;
 
         % Add to LRU queue
         lruQueue = [lruQueue, unit];
