@@ -1,7 +1,7 @@
 function spikeTrainCorrelation(optPath, wid, w_tot)
-% Spike train cross-correlation analysis with z-score calculation
+% Spike train cross-correlation with LRU cache for overlapping units
 % Args:
-%   opt: Options structure containing analysis parameters and paths
+%   optPath: Path to the options .mat file
 %   wid: Worker ID for parallel processing
 %   w_tot: Total number of workers
 
@@ -9,7 +9,7 @@ function spikeTrainCorrelation(optPath, wid, w_tot)
 global startTime wid
 startTime = tic;
 
-% Unpack options
+% Load options
 opt = load(optPath).opt;
 pairs = opt.pairs;
 binning = opt.binning;
@@ -25,19 +25,23 @@ pairs = pairs(ismember(pairs(:, 1), group), :);
 
 % Skip if no pairs to process
 if isempty(pairs)
-    fprintf('%s No pairs to process. Skipping...\n', prefixString);
-    results.opt = opt;
-    results.zscore_pos = [];
-    results.zscore_neg = [];
-    results.zscore_lag_pos = [];
-    results.zscore_lag_neg = [];
-    save(fullfile(opt.save_path, sprintf('results_%s_%d', opt.name, wid)), 'results', '-v7.3');
+    workerPrint('No pairs to process. Skipping...\n');
+    saveResults(opt, wid, [], [], [], [], 'No pairs to process.');
     return;
 end
 
+% Open the spikes matfile for read-only access
+workerPrint('Opening spikes matfile: %s\n', opt.spike_path);
+spikesFile = matfile(opt.spike_path, 'Writable', false);
+
+% Initialize spike cache and LRU queue
+spikeCache = containers.Map('KeyType', 'double', 'ValueType', 'any');
+lruQueue = []; % Stores the order of access (most recent at the end)
+cacheLimit = 2;
+
 % Initialize output arrays using NaN to handle absent data
 num_cells = max(pairs(:));
-num_groups = 32 / binning;
+num_groups = 32 / binning; % Assuming this is a fixed group count
 max_zscore_pos = NaN(num_cells, num_cells, num_groups);
 max_zscore_neg = NaN(num_cells, num_cells, num_groups);
 max_zscore_lag_pos = NaN(num_cells, num_cells, num_groups);
@@ -46,27 +50,25 @@ max_zscore_lag_neg = NaN(num_cells, num_cells, num_groups);
 % Log progress
 workerPrint('Processing %d pairs out of %d total pairs.\n', size(pairs, 1), size(opt.pairs, 1));
 
-% Load spikes data
-workerPrint('Loading spikes data...\n');
-spikes = load(opt.spike_path).spikes;
-workerPrint('Spikes data loaded. Size: %.2f GB\n', whos('spikes').bytes / 1e9);
-
-% Filter for unique units
-unique_units = unique(pairs(:));
-spikes = spikes(unique_units);
-pairs_converted = arrayfun(@(x) find(unique_units == x, 1), pairs);
-
 % Binned recording length (in samples)
 ul = opt.timePerRec * 1000 * binning;
 
 % Iterate over pairs of neurons
-for pair_num = 1:length(pairs)
-    workerPrint('Progress: Pair %d of %d\n', pair_num, length(pairs));
-    pair = pairs_converted(pair_num, :);
+for pair_num = 1:size(pairs, 1)
+    workerPrint('Progress: Pair %d of %d\n', pair_num, size(pairs, 1));
+    pair = pairs(pair_num, :);
 
-    % Retrieve full spike trains for the neuron pair
-    spikes1_full = spikes{pair(1)};
-    spikes2_full = spikes{pair(2)};
+    % Validate pair indices
+    if any(pair > length(spikesFile.spikes))
+        workerPrint('Invalid pair indices. Skipping pair: [%d, %d]\n', pair(1), pair(2));
+        continue;
+    end
+
+    % Retrieve or load spike train for unit 1
+    [spikes1_full, lruQueue] = getFromCache(spikeCache, lruQueue, pair(1), spikesFile, cacheLimit);
+
+    % Retrieve or load spike train for unit 2
+    [spikes2_full, lruQueue] = getFromCache(spikeCache, lruQueue, pair(2), spikesFile, cacheLimit);
 
     % Process data in groups (e.g., time bins)
     for group = 1:num_groups
@@ -127,27 +129,58 @@ for pair_num = 1:length(pairs)
 end
 
 % Save results
-results.opt = opt;
-results.zscore_pos = max_zscore_pos;
-results.zscore_neg = max_zscore_neg;
-results.zscore_lag_pos = max_zscore_lag_pos;
-results.zscore_lag_neg = max_zscore_lag_neg;
-
-if ~isfolder(opt.save_path)
-    mkdir(opt.save_path);
-end
-save(...
-    fullfile(...
-    opt.save_path, ...
-    sprintf('results_%s_%d', opt.name, wid)...
-    ), ...
-    'results', ...
-    '-v7.3');
-
+saveResults(opt, wid, max_zscore_pos, max_zscore_neg, max_zscore_lag_pos, max_zscore_lag_neg);
 workerPrint('Results saved successfully.\n');
 end
 
-function workerPrint(str,varargin)
+function [spikes, lruQueue] = getFromCache(spikeCache, lruQueue, unit, spikesFile, cacheLimit)
+% Retrieve spike train from cache or load from file if not cached
+try
+    if isKey(spikeCache, unit)
+        spikes = spikeCache(unit);
+        % Update LRU queue
+        lruQueue = [lruQueue(lruQueue ~= unit), unit];
+        workerPrint('Using cached spikes for unit %d\n', unit);
+    else
+        % Load spike train from file
+        spikes = spikesFile.spikes{unit};
+        spikeCache(unit) = spikes;
+
+        % Add to LRU queue
+        lruQueue = [lruQueue, unit];
+
+        % Evict least recently used item if cache exceeds limit
+        if numel(lruQueue) > cacheLimit
+            evictUnit = lruQueue(1);
+            remove(spikeCache, evictUnit);
+            lruQueue(1) = [];
+            workerPrint('Evicted spikes for unit %d from cache\n', evictUnit);
+        end
+
+        workerPrint('Loaded spikes for unit %d into cache\n', unit);
+    end
+catch ME
+    error('Failed to load spike train for unit %d: %s', unit, ME.message);
+end
+end
+
+function saveResults(opt, wid, zscore_pos, zscore_neg, zscore_lag_pos, zscore_lag_neg, message)
+% Save results to a .mat file
+results.opt = opt;
+results.zscore_pos = zscore_pos;
+results.zscore_neg = zscore_neg;
+results.zscore_lag_pos = zscore_lag_pos;
+results.zscore_lag_neg = zscore_lag_neg;
+if exist('message', 'var')
+    results.message = message;
+end
+if ~isfolder(opt.save_path)
+    mkdir(opt.save_path);
+end
+save(fullfile(opt.save_path, sprintf('results_%s_%d', opt.name, wid)), 'results', '-v7.3');
+end
+
+function workerPrint(str, varargin)
 global startTime wid;
 fprintf('[%.2fs] [Worker %d] %s', toc(startTime), wid, sprintf(str, varargin{:}));
 end
