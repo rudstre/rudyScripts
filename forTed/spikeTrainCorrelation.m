@@ -5,6 +5,10 @@ function spikeTrainCorrelation(optPath, wid, w_tot)
 %   wid: Worker ID for parallel processing
 %   w_tot: Total number of workers
 
+% Start timer
+global startTime wid
+startTime = tic;
+
 % Unpack options
 opt = load(optPath).opt;
 pairs = opt.pairs;
@@ -21,7 +25,7 @@ pairs = pairs(ismember(pairs(:, 1), group), :);
 
 % Skip if no pairs to process
 if isempty(pairs)
-    fprintf('[Worker %d] No pairs to process. Skipping...\n', wid);
+    fprintf('%s No pairs to process. Skipping...\n', prefixString);
     results.opt = opt;
     results.zscore_pos = [];
     results.zscore_neg = [];
@@ -40,12 +44,12 @@ max_zscore_lag_pos = NaN(num_cells, num_cells, num_groups);
 max_zscore_lag_neg = NaN(num_cells, num_cells, num_groups);
 
 % Log progress
-fprintf('[Worker %d] Processing %d pairs out of %d total pairs.\n', wid, size(pairs, 1), size(opt.pairs, 1));
+workerPrint('Processing %d pairs out of %d total pairs.\n', size(pairs, 1), size(opt.pairs, 1));
 
 % Load spikes data
-fprintf('[Worker %d] Loading spikes data...\n', wid);
+workerPrint('Loading spikes data...\n');
 spikes = load(opt.spike_path).spikes;
-fprintf('[Worker %d] Spikes data loaded. Size: %.2f GB\n', wid, whos('spikes').bytes / 1e9);
+workerPrint('Spikes data loaded. Size: %.2f GB\n', whos('spikes').bytes / 1e9);
 
 % Filter for unique units
 unique_units = unique(pairs(:));
@@ -57,7 +61,7 @@ ul = opt.timePerRec * 1000 * binning;
 
 % Iterate over pairs of neurons
 for pair_num = 1:length(pairs)
-    fprintf('[Worker %d of %d] Progress: Pair %d of %d\n', wid, w_tot, pair_num, length(pairs));
+    workerPrint('Progress: Pair %d of %d\n', pair_num, length(pairs));
     pair = pairs_converted(pair_num, :);
 
     % Retrieve full spike trains for the neuron pair
@@ -134,9 +138,16 @@ if ~isfolder(opt.save_path)
 end
 save(...
     fullfile(...
-       opt.save_path, ...
-       sprintf('results_%s_%d', opt.name, wid)...
-       ), ...
+    opt.save_path, ...
+    sprintf('results_%s_%d', opt.name, wid)...
+    ), ...
     'results', ...
     '-v7.3');
+
+workerPrint('Results saved successfully.\n');
+end
+
+function workerPrint(str,varargin)
+global start wid;
+fprintf('[%.2fs] [Worker %d] %s', toc(start), wid, sprintf(str, varargin{:}));
 end
