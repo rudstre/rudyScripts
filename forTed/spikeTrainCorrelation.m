@@ -148,6 +148,6 @@ workerPrint('Results saved successfully.\n');
 end
 
 function workerPrint(str,varargin)
-global start wid;
-fprintf('[%.2fs] [Worker %d] %s', toc(start), wid, sprintf(str, varargin{:}));
+global startTime wid;
+fprintf('[%.2fs] [Worker %d] %s', toc(startTime), wid, sprintf(str, varargin{:}));
 end
