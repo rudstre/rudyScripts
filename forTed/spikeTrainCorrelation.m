@@ -32,7 +32,6 @@ end
 
 % Open the spikes matfile for read-only access
 workerPrint('Opening spikes matfile: %s\n', opt.spike_path);
-spikesFile = matfile(opt.spike_path, 'Writable', false);
 
 % Initialize spike cache and LRU queue
 spikeCache = containers.Map('KeyType', 'double', 'ValueType', 'any');
@@ -58,20 +57,14 @@ for pair_num = 1:size(pairs, 1)
     workerPrint('Progress: Pair %d of %d\n', pair_num, size(pairs, 1));
     pair = pairs(pair_num, :);
 
-    % Validate pair indices
-    if any(pair > length(spikesFile.spikes))
-        workerPrint('Invalid pair indices. Skipping pair: [%d, %d]\n', pair(1), pair(2));
-        continue;
-    end
-
     % Retrieve or load spike train for unit 1
-    [spikes1_full, lruQueue] = getFromCache(spikeCache, lruQueue, pair(1), spikesFile, cacheLimit);
+    [spikes1_full, lruQueue] = getFromCache(spikeCache, lruQueue, pair(1), opt.spike_path, cacheLimit);
 
     % Retrieve or load spike train for unit 2
-    [spikes2_full, lruQueue] = getFromCache(spikeCache, lruQueue, pair(2), spikesFile, cacheLimit);
+    [spikes2_full, lruQueue] = getFromCache(spikeCache, lruQueue, pair(2), opt.spike_path, cacheLimit);
 
     % Log memory usage periodically
-    if true % Log every 10 pairs
+    if false % Log every 10 pairs
         runtime = java.lang.Runtime.getRuntime();
         usedMemory = (runtime.totalMemory() - runtime.freeMemory()) / 1e6; % Convert to MB
         workerPrint('Memory Usage: %.2f MB\n', usedMemory);
@@ -140,7 +133,7 @@ saveResults(opt, wid, max_zscore_pos, max_zscore_neg, max_zscore_lag_pos, max_zs
 workerPrint('Results saved successfully.\n');
 end
 
-function [spikes, lruQueue] = getFromCache(spikeCache, lruQueue, unit, spikesFile, cacheLimit)
+function [spikes, lruQueue] = getFromCache(spikeCache, lruQueue, unit, spikePath, cacheLimit)
 % Retrieve spike train from cache or load from file if not cached
 try
     if isKey(spikeCache, unit)
@@ -150,7 +143,9 @@ try
         workerPrint('Using cached spikes for unit %d\n', unit);
     else
         % Load spike train from file
-        spikes = spikesFile.spikes(unit,1); spikes = spikes{:};
+        spikes = load(...
+                fullfile(spikePath,sprintf('spikes_%d',unit))...
+            ).sp;
         spikeCache(unit) = spikes;
 
         % Add to LRU queue
