@@ -3,7 +3,7 @@ function groups = generatePairGroups(ncells, ngroups)
     pairs = nchoosek(1:ncells, 2);
     
     % Count occurrences of each cell number in the pairs
-    counts = histc(pairs(:), 1:ncells);  % Total frequency of each cell number
+    counts = histc(pairs(:,1), 1:ncells);  % Total frequency of each cell number
 
     % Initialize groups and their sums
     groups = cell(1, ngroups);           % Each group contains cell numbers
@@ -31,10 +31,10 @@ function groups = generatePairGroups(ncells, ngroups)
     end
 
     % % Display results
-    % for i = 1:ngroups
-    %     fprintf('Group %d: %s (Sum of counts = %d)\n', i, mat2str(groups{i}), group_sums(i));
-    % end
-    % 
-    % % Display the range of group sums
-    % fprintf('Range of group sums: [%d, %d]\n', min(group_sums), max(group_sums));
+    for i = 1:ngroups
+        fprintf('Group %d: %s (Sum of counts = %d)\n', i, mat2str(groups{i}), group_sums(i));
+    end
+
+    % Display the range of group sums
+    fprintf('Range of group sums: [%d, %d]\n', min(group_sums), max(group_sums));
 end
