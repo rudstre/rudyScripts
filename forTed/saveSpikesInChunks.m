@@ -1,4 +1,4 @@
-function saveSpikesInChunks(spikeTrainPath)
+function spikes = saveSpikesInChunks(spikeTrainPath)
 % SAVESPIKESINCHUNKS Loads a compiled spike train, processes it into binned spikes, 
 % and saves the results in separate .mat files.
 %

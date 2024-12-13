@@ -17,6 +17,7 @@ central_window = opt.central_window;
 thr_spikes = opt.thr_spikes;
 max_lag = opt.max_lag;
 num_random_lags = opt.num_random_lags;
+num_sessions = opt.nsessions;
 
 % Generate groups of pairs based on worker ID
 groups = generatePairGroups(max(pairs(:)), w_tot);
@@ -40,7 +41,7 @@ cacheLimit = 2;
 
 % Initialize output arrays using NaN to handle absent data
 num_cells = max(pairs(:));
-num_groups = 32 / binning; % Assuming this is a fixed group count
+num_groups = num_sessions / binning;
 max_zscore_pos = NaN(num_cells, num_cells, num_groups);
 max_zscore_neg = NaN(num_cells, num_cells, num_groups);
 max_zscore_lag_pos = NaN(num_cells, num_cells, num_groups);
@@ -58,19 +59,14 @@ for pair_num = 1:size(pairs, 1)
     pair = pairs(pair_num, :);
 
     % Retrieve or load spike train for unit 1
-    [spikes1_full, lruQueue] = getFromCache(spikeCache, lruQueue, pair(1), opt.spike_path, cacheLimit);
+    [spikes1_full, lruQueue] = getFromCache(...
+        spikeCache, lruQueue, pair(1), opt.spike_path, cacheLimit);
 
     % Retrieve or load spike train for unit 2
-    [spikes2_full, lruQueue] = getFromCache(spikeCache, lruQueue, pair(2), opt.spike_path, cacheLimit);
+    [spikes2_full, lruQueue] = getFromCache(...
+        spikeCache, lruQueue, pair(2), opt.spike_path, cacheLimit);
 
-    % Log memory usage periodically
-    if false % Log every 10 pairs
-        runtime = java.lang.Runtime.getRuntime();
-        usedMemory = (runtime.totalMemory() - runtime.freeMemory()) / 1e6; % Convert to MB
-        workerPrint('Memory Usage: %.2f MB\n', usedMemory);
-    end
-
-    % Process data in groups (e.g., time bins)
+    % Process data in time bins
     for group = 1:num_groups
         % Define segment indices for the current group
         idx_start = ul * (group - 1) + 1;
@@ -81,7 +77,7 @@ for pair_num = 1:size(pairs, 1)
             continue;
         end
 
-        % Extract spike segments for the current group
+        % Extract spike segments for the current time bin
         spikes1 = spikes1_full(idx_start:idx_end);
         spikes2 = spikes2_full(idx_start:idx_end);
 
@@ -110,7 +106,6 @@ for pair_num = 1:size(pairs, 1)
         % Find most extreme z-scores for positive and negative lags
         pos_lag_indices = lags_no_zero > 0;
         neg_lag_indices = lags_no_zero < 0;
-
         [~, max_pos_idx] = max(abs(z_scores(pos_lag_indices)));
         [~, max_neg_idx] = max(abs(z_scores(neg_lag_indices)));
 
@@ -129,7 +124,8 @@ for pair_num = 1:size(pairs, 1)
 end
 
 % Save results
-saveResults(opt, wid, max_zscore_pos, max_zscore_neg, max_zscore_lag_pos, max_zscore_lag_neg);
+saveResults(opt, wid, ...
+    max_zscore_pos, max_zscore_neg, max_zscore_lag_pos, max_zscore_lag_neg);
 workerPrint('Results saved successfully.\n');
 end
 
