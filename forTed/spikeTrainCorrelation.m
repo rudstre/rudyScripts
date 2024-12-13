@@ -21,8 +21,7 @@ num_sessions = opt.nsessions;
 
 % Generate groups of pairs based on worker ID
 groups = generatePairGroups(max(pairs(:)), w_tot);
-group = groups{wid};
-pairs = pairs(ismember(pairs(:, 1), group), :);
+pairs = groups{wid};
 
 % Skip if no pairs to process
 if isempty(pairs)
