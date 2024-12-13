@@ -21,10 +21,10 @@ num_sessions = opt.nsessions;
 
 % Generate groups of pairs based on worker ID
 groups = generatePairGroups(max(pairs(:)), w_tot);
-pairs = groups{wid};
+pairs_worker = groups{wid};
 
 % Skip if no pairs to process
-if isempty(pairs)
+if isempty(pairs_worker)
     workerPrint('No pairs to process. Skipping...\n');
     saveResults(opt, wid, [], [], [], [], 'No pairs to process.');
     return;
@@ -47,15 +47,15 @@ max_zscore_lag_pos = NaN(num_cells, num_cells, num_groups);
 max_zscore_lag_neg = NaN(num_cells, num_cells, num_groups);
 
 % Log progress
-workerPrint('Processing %d pairs out of %d total pairs.\n', size(pairs, 1), size(opt.pairs, 1));
+workerPrint('Processing %d pairs out of %d total pairs.\n', size(pairs_worker, 1), size(opt.pairs, 1));
 
 % Binned recording length (in samples)
 ul = seconds(opt.timePerRec) * 1000 * binning;
 
 % Iterate over pairs of neurons
-for pair_num = 1:size(pairs, 1)
-    workerPrint('Progress: Pair %d of %d\n', pair_num, size(pairs, 1));
-    pair = pairs(pair_num, :);
+for pair_num = 1:size(pairs_worker, 1)
+    workerPrint('Progress: Pair %d of %d\n', pair_num, size(pairs_worker, 1));
+    pair = pairs_worker(pair_num, :);
 
     % Retrieve or load spike train for unit 1
     [spikes1_full, lruQueue] = getFromCache(...
