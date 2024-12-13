@@ -35,6 +35,9 @@ for i = 3:length(files)
     end
 
     % Add current file's data to the cumulative arrays
+    if isempty(zn)
+        continue
+    end
     zneg = zneg + zn;
     zpos = zpos + zp;
     lneg = lneg + ln;
@@ -42,22 +45,23 @@ for i = 3:length(files)
 end
 
 % Adding reverse pairs to matrix
-[x, y, ~] = ind2sub(size(zneg), find(~zneg));
+[x, y, z] = ind2sub(size(zneg), find(zneg == 0));
 for i = 1:length(x)
     xi = x(i);
     yi = y(i);
+    zi = z(i);
 
-    if any([zneg(xi, yi, :), zpos(xi, yi, :), lneg(xi, yi, :), lpos(xi, yi, :)])
+    if any([zneg(xi, yi, zi), zpos(xi, yi, zi), lneg(xi, yi, zi), lpos(xi, yi, zi)])
         error('Problem!!')
     end
 
     % Adjust symmetry: if zneg at (xi, yi) is zero, try to mirror from (yi, xi).
     % Similarly handle zpos, lneg, and lpos to maintain consistent symmetrical structure.
     % Note: lneg and lpos get their sign flipped for the reversed pair.
-    zneg(xi, yi, :) = zneg(yi, xi, :);
-    zpos(xi, yi, :) = zpos(yi, xi, :);
-    lneg(xi, yi, :) = -lneg(yi, xi, :);
-    lpos(xi, yi, :) = -lpos(yi, xi, :);
+    zneg(xi, yi, zi) = zneg(yi, xi, zi);
+    zpos(xi, yi, zi) = zpos(yi, xi, zi);
+    lneg(xi, yi, zi) = -lneg(yi, xi, zi);
+    lpos(xi, yi, zi) = -lpos(yi, xi, zi);
 end
 
 % Convert zeros or infinities back into NaNs.
