@@ -24,7 +24,6 @@ for i = 3:length(files)
     lp = data.zscore_lag_pos;
 
     % Replace NaNs with 0 in all arrays
-    % (This might be done so that adding them up doesn’t propagate NaNs)
     zn(isnan(zn)) = 0;
     zp(isnan(zp)) = 0;
     ln(isnan(ln)) = 0;
@@ -42,16 +41,12 @@ for i = 3:length(files)
     lpos = lpos + lp;
 end
 
-% After combining all files, find indices of pairs that still have all zero values
-% ind2sub converts linear indices to (x,y,...) subscripts; we only have (x,y,...) here.
+% Adding reverse pairs to matrix
 [x, y, ~] = ind2sub(size(zneg), find(~zneg));
-
-% Loop through these pairs
 for i = 1:length(x)
     xi = x(i);
     yi = y(i);
-    % If any corresponding entries in these zero locations are not actually zero
-    % (checking all four arrays), throw an error. This is a sanity check.
+
     if any([zneg(xi, yi, :), zpos(xi, yi, :), lneg(xi, yi, :), lpos(xi, yi, :)])
         error('Problem!!')
     end

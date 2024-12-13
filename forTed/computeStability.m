@@ -2,7 +2,7 @@ function [observedVar, nullDist] = computeStability(data)
 [nx, ny, nt] = size(data);
 
 % Flatten the (nx, ny) pairs into a single dimension for convenience
-pairs_data = reshape(data, [], nt);  % Now size is [nx*ny, 3]
+pairs_data = convertPairsFromSqFm3d(data);  % Now size is [nx*ny, 3]
 
 % Compute observed variance for each pair (row), then median across all pairs
 observed_variances = var(pairs_data, 0, 2); % variance along the time dimension
