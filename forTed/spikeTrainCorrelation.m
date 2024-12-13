@@ -40,7 +40,7 @@ cacheLimit = 2;
 
 % Initialize output arrays using NaN to handle absent data
 num_cells = max(pairs(:));
-num_groups = num_sessions / binning;
+num_groups = ceil(num_sessions / binning);
 max_zscore_pos = NaN(num_cells, num_cells, num_groups);
 max_zscore_neg = NaN(num_cells, num_cells, num_groups);
 max_zscore_lag_pos = NaN(num_cells, num_cells, num_groups);
