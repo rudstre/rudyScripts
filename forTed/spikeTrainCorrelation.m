@@ -51,7 +51,7 @@ max_zscore_lag_neg = NaN(num_cells, num_cells, num_groups);
 workerPrint('Processing %d pairs out of %d total pairs.\n', size(pairs, 1), size(opt.pairs, 1));
 
 % Binned recording length (in samples)
-ul = opt.timePerRec * 1000 * binning;
+ul = seconds(opt.timePerRec) * 1000 * binning;
 
 % Iterate over pairs of neurons
 for pair_num = 1:size(pairs, 1)
