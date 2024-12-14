@@ -135,7 +135,6 @@ try
         spikes = spikeCache(unit);
         % Update LRU queue
         lruQueue = [lruQueue(lruQueue ~= unit), unit];
-        workerPrint('Using cached spikes for unit %d\n', unit);
     else
         % Load spike train from file
         spikes = load(...
@@ -151,10 +150,8 @@ try
             evictUnit = lruQueue(1);
             remove(spikeCache, evictUnit);
             lruQueue(1) = [];
-            workerPrint('Evicted spikes for unit %d from cache\n', evictUnit);
         end
 
-        workerPrint('Loaded spikes for unit %d into cache\n', unit);
     end
 catch ME
     error('Failed to load spike train for unit %d: %s', unit, ME.message);
