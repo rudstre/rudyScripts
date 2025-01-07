@@ -89,7 +89,7 @@ for pair_num = 1:size(pairs_worker, 1)
         lags_no_zero = lags(non_zero_lag_indices);
 
         % Check for sufficient spike coincidences
-        if sum(ccf_no_zero) < thr_spikes
+        if sum(ccf_no_zero) < 0
             max_zscore_lag_pos(pair(1), pair(2), group) = 0;
             max_zscore_lag_neg(pair(1), pair(2), group) = 0;
             continue;
