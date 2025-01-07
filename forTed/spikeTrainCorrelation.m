@@ -21,7 +21,7 @@ num_sessions = opt.nsessions;
 
 % Generate groups of pairs based on worker ID
 groups = generatePairGroups(max(pairs(:)), w_tot);
-pairs_worker = groups{wid};
+pairs_worker = groups{wid}; opt.pairs = pairs_worker;
 
 % Skip if no pairs to process
 if isempty(pairs_worker)
@@ -90,35 +90,61 @@ for pair_num = 1:size(pairs_worker, 1)
 
         % Check for sufficient spike coincidences
         if sum(ccf_no_zero) < thr_spikes
+            max_zscore_lag_pos(pair(1), pair(2), group) = 0;
+            max_zscore_lag_neg(pair(1), pair(2), group) = 0;
             continue;
         end
 
         % Generate null distribution from random shifts
-        random_lags = randsample([-max_lag:-central_window-1, central_window+1:max_lag], num_random_lags, true);
-        null_distribution = arrayfun(@(lag) sum(circshift(spikes1, lag) .* spikes2), random_lags);
+        random_lags = randsample([-max_lag:-15, 15:max_lag], num_random_lags, true);
+        null_distribution_plus = arrayfun(@(lag) computeCorrInWindow(spikes1,spikes2,lag,central_window,'max'), random_lags);
+        null_distribution_minus = arrayfun(@(lag) computeCorrInWindow(spikes1,spikes2,lag,central_window,'min'), random_lags);
 
         % Calculate z-scores
-        mean_null = mean(null_distribution);
-        std_null = std(null_distribution);
-        z_scores = (ccf_no_zero - mean_null) / std_null;
+        mean_null_plus = mean(null_distribution_plus);
+        mean_null_minus = mean(null_distribution_minus);
+        std_null_plus = std(null_distribution_plus);
+        std_null_minus = std(null_distribution_minus);
+
+        z_scores_plus = (ccf_no_zero - mean_null_plus) / std_null_plus;
+        z_scores_minus = (ccf_no_zero - mean_null_minus) / std_null_minus;
 
         % Find most extreme z-scores for positive and negative lags
         pos_lag_indices = lags_no_zero > 0;
         neg_lag_indices = lags_no_zero < 0;
-        [~, max_pos_idx] = max(abs(z_scores(pos_lag_indices)));
-        [~, max_neg_idx] = max(abs(z_scores(neg_lag_indices)));
 
-        % Extract corresponding z-scores and lags
-        z_scores_pos = z_scores(pos_lag_indices);
-        z_scores_neg = z_scores(neg_lag_indices);
-        lags_pos = lags_no_zero(pos_lag_indices);
-        lags_neg = lags_no_zero(neg_lag_indices);
+        [pos_z_plus, pos_idx_plus] = max(z_scores_plus(pos_lag_indices));
+        [pos_z_minus, pos_idx_minus] = min(z_scores_minus(pos_lag_indices));
+        [~,pm_pos] = max([pos_z_plus,-pos_z_minus]);
 
         % Store results in output arrays
+        if pm_pos == 1
+            z_scores_pos = z_scores_plus(pos_lag_indices);
+            max_pos_idx = pos_idx_plus;
+        else
+            z_scores_pos = z_scores_minus(pos_lag_indices);
+            max_pos_idx = pos_idx_minus;
+        end
+
+        [neg_z_plus, neg_idx_plus] = max(z_scores_plus(neg_lag_indices));
+        [neg_z_minus, neg_idx_minus] = min(z_scores_minus(neg_lag_indices));
+        [~,pm_neg] = max([neg_z_plus,-neg_z_minus]);
+
+        if pm_neg == 1
+            z_scores_neg = z_scores_plus(neg_lag_indices);
+            max_neg_idx = neg_idx_plus;
+        else
+            z_scores_neg = z_scores_minus(neg_lag_indices);
+            max_neg_idx = neg_idx_minus;
+        end
+
+        lags_pos = lags_no_zero(pos_lag_indices);
+        lags_neg = lags_no_zero(neg_lag_indices);
         max_zscore_pos(pair(1), pair(2), group) = z_scores_pos(max_pos_idx);
         max_zscore_neg(pair(1), pair(2), group) = z_scores_neg(max_neg_idx);
         max_zscore_lag_pos(pair(1), pair(2), group) = lags_pos(max_pos_idx);
         max_zscore_lag_neg(pair(1), pair(2), group) = lags_neg(max_neg_idx);
+
     end
 end
 
@@ -138,7 +164,7 @@ try
     else
         % Load spike train from file
         spikes = load(...
-                fullfile(spikePath,sprintf('spikes_%d',unit))...
+            fullfile(spikePath,sprintf('spikes_%d',unit))...
             ).sp;
         spikeCache(unit) = spikes;
 
@@ -155,6 +181,16 @@ try
     end
 catch ME
     error('Failed to load spike train for unit %d: %s', unit, ME.message);
+end
+end
+
+function corr = computeCorrInWindow(x,y,lag,window,pm)
+cor = xcorr(x,circshift(y,lag),floor(window/2));
+
+if strcmpi(pm,'max')
+    corr = max(cor);
+elseif strcmpi(pm,'min')
+    corr = min(cor);
 end
 end
 
