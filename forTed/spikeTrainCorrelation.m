@@ -1,216 +1,207 @@
-function spikeTrainCorrelation(optPath, wid, w_tot)
+function spikeTrainCorrelation(optPath, workerId, totalWorkers)
 % Spike train cross-correlation with LRU cache for overlapping units
 % Args:
 %   optPath: Path to the options .mat file
-%   wid: Worker ID for parallel processing
-%   w_tot: Total number of workers
+%   workerId: Worker ID for parallel processing
+%   totalWorkers: Total number of workers
 
-% Start timer
-global startTime wid
+% Initialize global variables
+global startTime currentWorkerId
 startTime = tic;
+currentWorkerId = workerId;
 
-% Load options
-opt = load(optPath).opt;
-pairs = opt.pairs;
-binning = opt.binning;
-central_window = opt.central_window;
-thr_spikes = opt.thr_spikes;
-max_lag = opt.max_lag;
-num_random_lags = opt.num_random_lags;
-num_sessions = opt.nsessions;
+% Load configuration options
+options = load(optPath).opt;
+pairsToProcess = options.pairs;
+binSize = options.binning;
+centralWindowSize = options.central_window;
+minSpikeThreshold = options.thr_spikes;
+numSessions = options.nsessions;
+baselineMax = 50;
 
-% Generate groups of pairs based on worker ID
-groups = generatePairGroups(max(pairs(:)), w_tot);
-pairs_worker = groups{wid}; opt.pairs = pairs_worker;
+% Assign pairs to the current worker
+pairGroups = generatePairGroups(max(pairsToProcess(:)), totalWorkers);
+workerPairs = pairGroups{workerId};
+options.pairs = workerPairs;
 
-% Skip if no pairs to process
-if isempty(pairs_worker)
-    workerPrint('No pairs to process. Skipping...\n');
-    saveResults(opt, wid, [], [], [], [], 'No pairs to process.');
+% Exit early if no pairs assigned
+if isempty(workerPairs)
+    logMessage('No pairs to process. Skipping...\n');
+    saveResults(options, workerId, [], [], [], [], 'No pairs to process.');
     return;
 end
 
-% Open the spikes matfile for read-only access
-workerPrint('Opening spikes matfile: %s\n', opt.spike_path);
-
-% Initialize spike cache and LRU queue
+% Open the spikes file and initialize the cache
+logMessage('Opening spikes matfile: %s\n', options.spike_path);
 spikeCache = containers.Map('KeyType', 'double', 'ValueType', 'any');
-lruQueue = []; % Stores the order of access (most recent at the end)
+lruQueue = []; % LRU queue for cache eviction
 cacheLimit = 2;
 
-% Initialize output arrays using NaN to handle absent data
-num_cells = max(pairs(:));
-num_groups = ceil(num_sessions / binning);
-max_zscore_pos = NaN(num_cells, num_cells, num_groups);
-max_zscore_neg = NaN(num_cells, num_cells, num_groups);
-max_zscore_lag_pos = NaN(num_cells, num_cells, num_groups);
-max_zscore_lag_neg = NaN(num_cells, num_cells, num_groups);
+% Initialize result arrays
+numNeurons = max(pairsToProcess(:));
+numTimeGroups = ceil(numSessions / binSize);
+zscorePosMax = NaN(numNeurons, numNeurons, numTimeGroups);
+zscoreNegMax = NaN(numNeurons, numNeurons, numTimeGroups);
+lagPosMax = NaN(numNeurons, numNeurons, numTimeGroups);
+lagNegMax = NaN(numNeurons, numNeurons, numTimeGroups);
 
-% Log progress
-workerPrint('Processing %d pairs out of %d total pairs.\n', size(pairs_worker, 1), size(opt.pairs, 1));
+logMessage('Processing %d pairs out of %d total pairs.\n', size(workerPairs, 1), size(options.pairs, 1));
 
-% Binned recording length (in samples)
-ul = seconds(opt.timePerRec) * 1000 * binning;
+% Define recording length in bins
+binLength = seconds(options.timePerRec) * 1000 * binSize;
 
-% Iterate over pairs of neurons
-for pair_num = 1:size(pairs_worker, 1)
-    workerPrint('Progress: Pair %d of %d\n', pair_num, size(pairs_worker, 1));
-    pair = pairs_worker(pair_num, :);
+% Process each pair assigned to this worker
+for pairIdx = 1:size(workerPairs, 1)
+    logMessage('Progress: Pair %d of %d\n', pairIdx, size(workerPairs, 1));
+    neuronPair = workerPairs(pairIdx, :);
 
-    % Retrieve or load spike train for unit 1
-    [spikes1_full, lruQueue] = getFromCache(...
-        spikeCache, lruQueue, pair(1), opt.spike_path, cacheLimit);
+    % Load or retrieve spike trains for the neuron pair
+    [spikesNeuron1, lruQueue] = loadFromCache(spikeCache, lruQueue, neuronPair(1), options.spike_path, cacheLimit);
+    [spikesNeuron2, lruQueue] = loadFromCache(spikeCache, lruQueue, neuronPair(2), options.spike_path, cacheLimit);
 
-    % Retrieve or load spike train for unit 2
-    [spikes2_full, lruQueue] = getFromCache(...
-        spikeCache, lruQueue, pair(2), opt.spike_path, cacheLimit);
-
-    % Process data in time bins
-    for group = 1:num_groups
-        % Define segment indices for the current group
-        idx_start = ul * (group - 1) + 1;
-        idx_end = min([idx_start + ul - 1, length(spikes1_full), length(spikes2_full)]);
-
+    % Process in time bins
+    for timeGroupIdx = 1:numTimeGroups
+        % Define the time segment
+        segmentStart = binLength * (timeGroupIdx - 1) + 1;
+        segmentEnd = min([segmentStart + binLength - 1, length(spikesNeuron1), length(spikesNeuron2)]);
+        
         % Skip invalid segments
-        if idx_start > idx_end
+        if segmentStart > segmentEnd
             continue;
         end
 
-        % Extract spike segments for the current time bin
-        spikes1 = spikes1_full(idx_start:idx_end);
-        spikes2 = spikes2_full(idx_start:idx_end);
+        % Extract spikes for the current segment
+        segmentSpikesNeuron1 = spikesNeuron1(segmentStart:segmentEnd);
+        segmentSpikesNeuron2 = spikesNeuron2(segmentStart:segmentEnd);
 
-        % Compute cross-correlation within the specified lag window
-        [ccf, lags] = xcorr(spikes1, spikes2, central_window);
+        % Compute cross-correlation
+        [crossCorr, lagValues] = xcorr(segmentSpikesNeuron1, segmentSpikesNeuron2, baselineMax);
 
         % Exclude zero lag
-        non_zero_lag_indices = lags ~= 0;
-        ccf_no_zero = ccf(non_zero_lag_indices);
-        lags_no_zero = lags(non_zero_lag_indices);
+        nonZeroLagIdx = lagValues ~= 0;
+        crossCorrNoZero = crossCorr(nonZeroLagIdx);
+        lagValuesNoZero = lagValues(nonZeroLagIdx);
 
-        % Check for sufficient spike coincidences
-        if sum(ccf_no_zero) < 0
-            max_zscore_lag_pos(pair(1), pair(2), group) = 0;
-            max_zscore_lag_neg(pair(1), pair(2), group) = 0;
+        % Skip if insufficient spike coincidences
+        if sum(crossCorrNoZero) < minSpikeThreshold
+            lagPosMax(neuronPair(1), neuronPair(2), timeGroupIdx) = 0;
+            lagNegMax(neuronPair(1), neuronPair(2), timeGroupIdx) = 0;
             continue;
         end
 
-        % Generate null distribution from random shifts
-        random_lags = randsample([-max_lag:-15, 15:max_lag], num_random_lags, true);
-        null_distribution_plus = arrayfun(@(lag) computeCorrInWindow(spikes1,spikes2,lag,central_window,'max'), random_lags);
-        null_distribution_minus = arrayfun(@(lag) computeCorrInWindow(spikes1,spikes2,lag,central_window,'min'), random_lags);
+        % Define baseline lag ranges
+        baselinePosLags = centralWindowSize:baselineMax;
+        baselineNegLags = -baselinePosLags(end:-1:1);
+        baselineIdxs = ismember(lagValuesNoZero, [baselineNegLags, baselinePosLags]);
 
-        % Calculate z-scores
-        mean_null_plus = mean(null_distribution_plus);
-        mean_null_minus = mean(null_distribution_minus);
-        std_null_plus = std(null_distribution_plus);
-        std_null_minus = std(null_distribution_minus);
+        % Calculate baseline statistics
+        baselineValues = crossCorrNoZero(baselineIdxs);
+        baselineMean = mean(baselineValues);
+        baselineStd = std(baselineValues);
 
-        z_scores_plus = (ccf_no_zero - mean_null_plus) / std_null_plus;
-        z_scores_minus = (ccf_no_zero - mean_null_minus) / std_null_minus;
+        % Calculate theoretical max-window extrema
+        expectedMax = baselineMean + baselineStd * sqrt(2 * log(centralWindowSize));
+        expectedMin = baselineMean - baselineStd * sqrt(2 * log(centralWindowSize));
+        varianceExtrema = baselineStd^2 / (2 * log(centralWindowSize));
 
-        % Find most extreme z-scores for positive and negative lags
-        pos_lag_indices = lags_no_zero > 0;
-        neg_lag_indices = lags_no_zero < 0;
+        % Positive lags
+        [zscorePosMax(neuronPair(1), neuronPair(2), timeGroupIdx), ...
+            lagPosMax(neuronPair(1), neuronPair(2), timeGroupIdx)] = ...
+            computeExtrema(crossCorrNoZero, lagValuesNoZero, 1:centralWindowSize, expectedMax, expectedMin, varianceExtrema);
 
-        [pos_z_plus, pos_idx_plus] = max(z_scores_plus(pos_lag_indices));
-        [pos_z_minus, pos_idx_minus] = min(z_scores_minus(pos_lag_indices));
-        [~,pm_pos] = max([pos_z_plus,-pos_z_minus]);
-
-        % Store results in output arrays
-        if pm_pos == 1
-            z_scores_pos = z_scores_plus(pos_lag_indices);
-            max_pos_idx = pos_idx_plus;
-        else
-            z_scores_pos = z_scores_minus(pos_lag_indices);
-            max_pos_idx = pos_idx_minus;
-        end
-
-        [neg_z_plus, neg_idx_plus] = max(z_scores_plus(neg_lag_indices));
-        [neg_z_minus, neg_idx_minus] = min(z_scores_minus(neg_lag_indices));
-        [~,pm_neg] = max([neg_z_plus,-neg_z_minus]);
-
-        if pm_neg == 1
-            z_scores_neg = z_scores_plus(neg_lag_indices);
-            max_neg_idx = neg_idx_plus;
-        else
-            z_scores_neg = z_scores_minus(neg_lag_indices);
-            max_neg_idx = neg_idx_minus;
-        end
-
-        lags_pos = lags_no_zero(pos_lag_indices);
-        lags_neg = lags_no_zero(neg_lag_indices);
-        max_zscore_pos(pair(1), pair(2), group) = z_scores_pos(max_pos_idx);
-        max_zscore_neg(pair(1), pair(2), group) = z_scores_neg(max_neg_idx);
-        max_zscore_lag_pos(pair(1), pair(2), group) = lags_pos(max_pos_idx);
-        max_zscore_lag_neg(pair(1), pair(2), group) = lags_neg(max_neg_idx);
-
+        % Negative lags
+        [zscoreNegMax(neuronPair(1), neuronPair(2), timeGroupIdx), ...
+            lagNegMax(neuronPair(1), neuronPair(2), timeGroupIdx)] = ...
+            computeExtrema(crossCorrNoZero, lagValuesNoZero, -(centralWindowSize:-1:1), expectedMax, expectedMin, varianceExtrema);
     end
 end
 
 % Save results
-saveResults(opt, wid, ...
-    max_zscore_pos, max_zscore_neg, max_zscore_lag_pos, max_zscore_lag_neg);
-workerPrint('Results saved successfully.\n');
+saveResults(options, workerId, zscorePosMax, zscoreNegMax, lagPosMax, lagNegMax);
+logMessage('Results saved successfully.\n');
 end
 
-function [spikes, lruQueue] = getFromCache(spikeCache, lruQueue, unit, spikePath, cacheLimit)
-% Retrieve spike train from cache or load from file if not cached
-try
-    if isKey(spikeCache, unit)
-        spikes = spikeCache(unit);
-        % Update LRU queue
-        lruQueue = [lruQueue(lruQueue ~= unit), unit];
+
+function [zFinal, lagFinal] = computeExtrema(ccf, lags, lagRange, expectedMax, expectedMin, varExtrema)
+% Compute z-scores and find extrema for a specified lag range
+lagIndices = ismember(lags, lagRange);          % Find indices for the specific lag range
+lagValues = lags(lagIndices);                   % Extract lag values within the range
+crossCorrValues = ccf(lagIndices);              % Extract cross-correlation values for the range
+
+% Compute z-scores for positive and negative lags
+zScoresPos = (crossCorrValues - expectedMax) / sqrt(varExtrema);
+zScoresNeg = (crossCorrValues - expectedMin) / sqrt(varExtrema);
+
+% Find maxima and their indices
+[zMaxPos, idxMaxPos] = max(zScoresPos);         % Maximum positive z-score
+[zMaxNeg, idxMaxNeg] = max(abs(zScoresNeg));    % Maximum negative z-score (absolute value)
+
+% Get corresponding lags
+lagMaxPos = lagValues(idxMaxPos);
+lagMaxNeg = lagValues(idxMaxNeg);
+
+% Threshold for determining significance
+threshold = 5;
+
+% Check if both extrema are above the threshold
+extremumCheck = [abs(zMaxPos), abs(zMaxNeg)];
+
+if ~all(extremumCheck > threshold)
+    % If not both extrema are high, return the dominant one
+    if abs(zMaxNeg) > abs(zMaxPos)
+        zFinal = -zMaxNeg;
+        lagFinal = lagMaxNeg;
     else
-        % Load spike train from file
-        spikes = load(...
-            fullfile(spikePath,sprintf('spikes_%d',unit))...
-            ).sp;
-        spikeCache(unit) = spikes;
+        zFinal = zMaxPos;
+        lagFinal = lagMaxPos;
+    end
+else
+    % If both extrema are high, do not oversimplify — return NaN
+    zFinal = NaN;
+    lagFinal = NaN;
+end
+end
 
-        % Add to LRU queue
-        lruQueue = [lruQueue, unit];
 
-        % Evict least recently used item if cache exceeds limit
-        if numel(lruQueue) > cacheLimit
-            evictUnit = lruQueue(1);
-            remove(spikeCache, evictUnit);
-            lruQueue(1) = [];
+function [spikes, queue] = loadFromCache(cache, queue, unitId, spikePath, maxCacheSize)
+% Retrieve spikes from cache or load from file if not cached
+try
+    if isKey(cache, unitId)
+        spikes = cache(unitId);
+        queue(queue == unitId) = [];
+        queue = [queue, unitId]; % Update LRU queue
+    else
+        spikes = load(fullfile(spikePath, sprintf('spikes_%d.mat', unitId))).sp;
+        cache(unitId) = spikes;
+        queue = [queue, unitId];
+        if numel(queue) > maxCacheSize
+            remove(cache, queue(1)); % Evict least recently used item
+            queue(1) = [];
         end
-
     end
 catch ME
-    error('Failed to load spike train for unit %d: %s', unit, ME.message);
+    error('Error loading spikes for unit %d: %s', unitId, ME.message);
 end
 end
 
-function corr = computeCorrInWindow(x,y,lag,window,pm)
-cor = xcorr(x,circshift(y,lag),floor(window/2));
-
-if strcmpi(pm,'max')
-    corr = max(cor);
-elseif strcmpi(pm,'min')
-    corr = min(cor);
-end
-end
-
-function saveResults(opt, wid, zscore_pos, zscore_neg, zscore_lag_pos, zscore_lag_neg, message)
+function saveResults(options, workerId, zscorePos, zscoreNeg, lagPos, lagNeg, message)
 % Save results to a .mat file
-results.opt = opt;
-results.zscore_pos = zscore_pos;
-results.zscore_neg = zscore_neg;
-results.zscore_lag_pos = zscore_lag_pos;
-results.zscore_lag_neg = zscore_lag_neg;
+results.options = options;
+results.zscorePos = zscorePos;
+results.zscoreNeg = zscoreNeg;
+results.lagPos = lagPos;
+results.lagNeg = lagNeg;
 if exist('message', 'var')
     results.message = message;
 end
-if ~isfolder(opt.save_path)
-    mkdir(opt.save_path);
+if ~isfolder(options.save_path)
+    mkdir(options.save_path);
 end
-save(fullfile(opt.save_path, sprintf('results_%s_%d', opt.name, wid)), 'results', '-v7.3');
+save(fullfile(options.save_path, sprintf('results_%s_%d.mat', options.name, workerId)), 'results', '-v7.3');
 end
 
-function workerPrint(str, varargin)
-global startTime wid;
-fprintf('[%.2fs] [Worker %d] %s', toc(startTime), wid, sprintf(str, varargin{:}));
+function logMessage(message, varargin)
+% Log worker-specific messages with timestamps
+global startTime currentWorkerId;
+fprintf('[%.2fs] [Worker %d] %s', toc(startTime), currentWorkerId, sprintf(message, varargin{:}));
 end
