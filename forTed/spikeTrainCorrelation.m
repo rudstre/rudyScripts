@@ -15,7 +15,6 @@ options = load(optPath).opt;
 pairsToProcess = options.pairs;
 binSize = options.binning;
 centralWindowSize = options.central_window;
-minSpikeThreshold = options.thr_spikes;
 numSessions = options.nsessions;
 baselineMax = 50;
 
@@ -81,13 +80,6 @@ for pairIdx = 1:size(workerPairs, 1)
         nonZeroLagIdx = lagValues ~= 0;
         crossCorrNoZero = crossCorr(nonZeroLagIdx);
         lagValuesNoZero = lagValues(nonZeroLagIdx);
-
-        % Skip if insufficient spike coincidences
-        if sum(crossCorrNoZero) < minSpikeThreshold
-            lagPosMax(neuronPair(1), neuronPair(2), timeGroupIdx) = 0;
-            lagNegMax(neuronPair(1), neuronPair(2), timeGroupIdx) = 0;
-            continue;
-        end
 
         % Define baseline lag ranges
         baselinePosLags = centralWindowSize:baselineMax;
