@@ -126,7 +126,7 @@ zScoresNeg = (crossCorrValues - expectedMin) / sqrt(varExtrema);
 
 % Find maxima and their indices
 [zMaxPos, idxMaxPos] = max(zScoresPos);         % Maximum positive z-score
-[zMaxNeg, idxMaxNeg] = max(abs(zScoresNeg));    % Maximum negative z-score (absolute value)
+[zMaxNeg, idxMaxNeg] = min(zScoresNeg);    % Maximum negative z-score (absolute value)
 
 % Get corresponding lags
 lagMaxPos = lagValues(idxMaxPos);
@@ -141,7 +141,7 @@ extremumCheck = [abs(zMaxPos), abs(zMaxNeg)];
 if ~all(extremumCheck > threshold)
     % If not both extrema are high, return the dominant one
     if abs(zMaxNeg) > abs(zMaxPos)
-        zFinal = -zMaxNeg;
+        zFinal = zMaxNeg;
         lagFinal = lagMaxNeg;
     else
         zFinal = zMaxPos;
