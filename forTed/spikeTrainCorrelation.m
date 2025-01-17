@@ -62,7 +62,7 @@ for pairIdx = 1:size(workerPairs, 1)
     for timeGroupIdx = 1:numTimeGroups
         % Define the time segment
         segmentStart = binLength * (timeGroupIdx - 1) + 1;
-        segmentEnd = min([segmentStart + binLength - 1, length(spikesNeuron1), length(spikesNeuron2)]);
+        segmentEnd = min([segmentStart + binLength - 1, length(spikesNeuron2), length(spikesNeuron1)]);
         
         % Skip invalid segments
         if segmentStart > segmentEnd
