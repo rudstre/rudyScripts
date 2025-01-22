@@ -15,8 +15,7 @@ options = load(optPath).opt;
 pairsToProcess = options.pairs;
 binSize = options.binning;
 centralWindowSize = options.central_window;
-numSessions = options.nsessions;
-baselineMax = 50;
+baselineMaxLag = options.max_lag;
 
 % Assign pairs to the current worker
 pairGroups = generatePairGroups(max(pairsToProcess(:)), totalWorkers);
@@ -36,18 +35,7 @@ spikeCache = containers.Map('KeyType', 'double', 'ValueType', 'any');
 lruQueue = []; % LRU queue for cache eviction
 cacheLimit = 2;
 
-% Initialize result arrays
-numNeurons = max(pairsToProcess(:));
-numTimeGroups = ceil(numSessions / binSize);
-zscorePosMax = NaN(numNeurons, numNeurons, numTimeGroups);
-zscoreNegMax = NaN(numNeurons, numNeurons, numTimeGroups);
-lagPosMax = NaN(numNeurons, numNeurons, numTimeGroups);
-lagNegMax = NaN(numNeurons, numNeurons, numTimeGroups);
-
 logMessage('Processing %d pairs out of %d total pairs.\n', size(workerPairs, 1), size(options.pairs, 1));
-
-% Define recording length in bins
-binLength = seconds(options.timePerRec) * 1000 * binSize;
 
 % Process each pair assigned to this worker
 for pairIdx = 1:size(workerPairs, 1)
@@ -58,23 +46,31 @@ for pairIdx = 1:size(workerPairs, 1)
     [spikesNeuron1, lruQueue] = loadFromCache(spikeCache, lruQueue, neuronPair(1), options.spike_path, cacheLimit);
     [spikesNeuron2, lruQueue] = loadFromCache(spikeCache, lruQueue, neuronPair(2), options.spike_path, cacheLimit);
 
+    if pairIdx == 1
+        numSessions = size(spikesNeuron1.spikes,2);
+        numTimeGroups = ceil(numSessions / binSize);
+        numNeurons = max(pairsToProcess(:));
+        zscorePosMax = NaN(numNeurons, numNeurons, numTimeGroups);
+        zscoreNegMax = NaN(numNeurons, numNeurons, numTimeGroups);
+        lagPosMax = NaN(numNeurons, numNeurons, numTimeGroups);
+        lagNegMax = NaN(numNeurons, numNeurons, numTimeGroups);
+        binStarts = (1:binSize:numSessions)';
+        sessionBins = [binStarts,binStarts + binSize - 1];
+        sessionBins(sessionBins > numSessions) = numSessions;
+    end
+
     % Process in time bins
     for timeGroupIdx = 1:numTimeGroups
         % Define the time segment
-        segmentStart = binLength * (timeGroupIdx - 1) + 1;
-        segmentEnd = min([segmentStart + binLength - 1, length(spikesNeuron2), length(spikesNeuron1)]);
-        
-        % Skip invalid segments
-        if segmentStart > segmentEnd
-            continue;
-        end
+        firstSession = sessionBins(timeGroupIdx,1);
+        lastSession = sessionBins(timeGroupIdx,2);
 
         % Extract spikes for the current segment
-        segmentSpikesNeuron1 = spikesNeuron1(segmentStart:segmentEnd);
-        segmentSpikesNeuron2 = spikesNeuron2(segmentStart:segmentEnd);
+        segmentSpikesNeuron1 = [spikesNeuron1.spikes{firstSession:lastSession}];
+        segmentSpikesNeuron2 = [spikesNeuron2.spikes{firstSession:lastSession}];
 
         % Compute cross-correlation
-        [crossCorr, lagValues] = xcorr(segmentSpikesNeuron1, segmentSpikesNeuron2, baselineMax);
+        [crossCorr, lagValues] = xcorr(segmentSpikesNeuron2,segmentSpikesNeuron1,baselineMaxLag);
 
         % Exclude zero lag
         nonZeroLagIdx = lagValues ~= 0;
@@ -82,7 +78,7 @@ for pairIdx = 1:size(workerPairs, 1)
         lagValuesNoZero = lagValues(nonZeroLagIdx);
 
         % Define baseline lag ranges
-        baselinePosLags = centralWindowSize:baselineMax;
+        baselinePosLags = centralWindowSize:baselineMaxLag;
         baselineNegLags = -baselinePosLags(end:-1:1);
         baselineIdxs = ismember(lagValuesNoZero, [baselineNegLags, baselinePosLags]);
 

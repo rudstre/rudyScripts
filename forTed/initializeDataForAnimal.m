@@ -1,15 +1,12 @@
-function opt = initializeDataForAnimal(animalDataPath,spikes)
+function opt = initializeDataForAnimal(animalDataPath)
 if nargin < 1
-    animalDataPath = fileSelector;
-end
-if nargin < 2
-    spikes = saveSpikesInChunks(animalDataPath);
+    animalDataPath = fileSelector('Select path to animal .mat workspace');
 end
 
-pairs = nchoosek(1:length(spikes),2);
-recLen = milliseconds(max(cellfun(@length,spikes)));
+load(animalDataPath,'SessionSplitSpikeTrains');
+pairs = nchoosek(1:length(SessionSplitSpikeTrains),1);
 
 spike_path = input('Enter path where spikes will be on cluster: ', 's');
 save_path = input('Enter path where results will be saved on cluster: ', 's');
-opt = createCorrelationsOptStruct(pairs,recLen,'spike_path',spike_path,'save_path',save_path);
+opt = createCorrelationsOptStruct(pairs,'spike_path',spike_path,'save_path',save_path);
 

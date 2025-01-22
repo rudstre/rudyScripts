@@ -17,24 +17,22 @@ function spikes = saveSpikesInChunks(spikeTrainPath)
 
     % If no input is given, prompt the user to select the file containing 'CompiledSpikeTrain'
     if nargin == 0
-        [fileName, fileDir] = uigetfile('*.mat', 'Select the compiled spike train file');
-        if isequal(fileName,0)
-            error('No file selected. Aborting.');
-        end
-        spikeTrainPath = fullfile(fileDir, fileName);
+        spikeTrainPath = fileSelector('Select path to spikes');
     end
 
     % Load 'CompiledSpikeTrain' from the specified file
-    S = load(spikeTrainPath, 'CompiledSpikeTrain');
-    if ~isfield(S, 'CompiledSpikeTrain')
-        error('The selected file does not contain ''CompiledSpikeTrain''.');
+    S = load(spikeTrainPath, 'SessionSplitSpikeTrains');
+    if ~isfield(S, 'SessionSplitSpikeTrains')
+        error('The selected file does not contain ''SessionSplitSpikeTrains''.');
     end
     
-    spikeTrain = S.CompiledSpikeTrain;
+    spikeTrain = S.SessionSplitSpikeTrains;
     
     fprintf('Computing spike time array...\n');
     % Convert spike times to binned spikes
-    spikes = cellfun(@spikeTimesToBins, spikeTrain, 'UniformOutput', false);
+    for i = 1:size(spikeTrain,2)
+        [spikes(:,i),t_start(i)] = spikeTimesToBins(spikeTrain(:,i));
+    end
 
     % Prompt user to select the output directory
     outputDir = uigetdir([], 'Select output directory for saved spike files');
@@ -47,7 +45,8 @@ function spikes = saveSpikesInChunks(spikeTrainPath)
         fp = fullfile(outputDir, sprintf('spikes_%d.mat', i));
         fprintf('Saving file %d of %d to %s...\n', i, numSpikes, fp);
         
-        sp = spikes{i};
+        sp.spikes = spikes(i,:);
+        sp.t = t_start;
         save(fp, 'sp');
     end
 end
