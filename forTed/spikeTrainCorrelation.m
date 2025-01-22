@@ -71,6 +71,10 @@ for pairIdx = 1:size(workerPairs, 1)
 
         % Compute cross-correlation
         [crossCorr, lagValues] = xcorr(segmentSpikesNeuron2,segmentSpikesNeuron1,baselineMaxLag);
+        thr = 4000;
+        if sum(crossCorr) < thr
+            continue
+        end
 
         % Exclude zero lag
         nonZeroLagIdx = lagValues ~= 0;
@@ -78,7 +82,7 @@ for pairIdx = 1:size(workerPairs, 1)
         lagValuesNoZero = lagValues(nonZeroLagIdx);
 
         % Define baseline lag ranges
-        baselinePosLags = centralWindowSize:baselineMaxLag;
+        baselinePosLags = 100:baselineMaxLag;
         baselineNegLags = -baselinePosLags(end:-1:1);
         baselineIdxs = ismember(lagValuesNoZero, [baselineNegLags, baselinePosLags]);
 
@@ -101,6 +105,8 @@ for pairIdx = 1:size(workerPairs, 1)
         [zscoreNegMax(neuronPair(1), neuronPair(2), timeGroupIdx), ...
             lagNegMax(neuronPair(1), neuronPair(2), timeGroupIdx)] = ...
             computeExtrema(crossCorrNoZero, lagValuesNoZero, -(centralWindowSize:-1:1), expectedMax, expectedMin, varianceExtrema);
+
+        zscorePosMax(neuronPair(1), neuronPair(2), timeGroupIdx)
     end
 end
 
