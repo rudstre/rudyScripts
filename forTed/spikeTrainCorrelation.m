@@ -13,9 +13,9 @@ currentWorkerId = workerId;
 % Load configuration options
 options = load(optPath).opt;
 pairsToProcess = options.pairs;
-binSize = options.binning;
+binSize = 4;%options.binning;
 centralWindowSize = options.central_window;
-baselineMaxLag = options.max_lag;
+baselineMaxLag = 1000;%options.max_lag;
 
 % Assign pairs to the current worker
 pairGroups = generatePairGroups(max(pairsToProcess(:)), totalWorkers);
