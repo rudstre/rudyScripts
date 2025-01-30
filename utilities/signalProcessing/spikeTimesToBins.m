@@ -1,18 +1,20 @@
-function [spikes_t,t_start] = spikeTimesToBins(spikes,binsize)
+function [spikes_t,ts,resolution] = spikeTimesToBins(spikes,resolution)
 if nargin < 2
-    binsize = .001; % upscale time by 1000x (sec to ms)
+    resolution = milliseconds(1); % ms resolution by default
 end
 if isempty(spikes)
     spikes_t = [];
-    t_start = nan;
+    ts = [];
     return
 end
 
 minCell = cellfun(@min,spikes,'UniformOutput',false);
 maxCell = cellfun(@max,spikes,'UniformOutput',false);
 
-t_start = min([minCell{:}]) / binsize;
-t_end = max([maxCell{:}]) / binsize;
+resolution_s = seconds(resolution);
+t_start = min([minCell{:}]) / resolution_s;
+t_end = max([maxCell{:}]) / resolution_s;
 
-spikes_t = cellfun(@(s) histcounts(s / binsize, t_start : t_end), spikes, 'UniformOutput', false);
+[spikes_t,ts_cell] = cellfun(@(s) histcounts(s / resolution_s, t_start : t_end), spikes, 'UniformOutput', false);
+ts = ts_cell{1} * milliseconds(resolution);
 end

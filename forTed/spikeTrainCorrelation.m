@@ -14,8 +14,8 @@ currentWorkerId = workerId;
 options = load(optPath).opt;
 pairsToProcess = options.pairs;
 binSize = 4;%options.binning;
-centralWindowSize = options.central_window;
-baselineMaxLag = 1000;%options.max_lag;
+centralWindowSize_ms = 10;%options.central_window;
+baselineMaxLag_ms = 1000;%options.max_lag;
 
 % Assign pairs to the current worker
 pairGroups = generatePairGroups(max(pairsToProcess(:)), totalWorkers);
@@ -57,6 +57,8 @@ for pairIdx = 1:size(workerPairs, 1)
         binStarts = (1:binSize:numSessions)';
         sessionBins = [binStarts,binStarts + binSize - 1];
         sessionBins(sessionBins > numSessions) = numSessions;
+        baselineMaxLag = baselineMaxLag_ms/milliseconds(spikesNeuron2.tbin);
+        centralWindowSize = centralWindowSize_ms/milliseconds(spikesNeuron2.tbin);
     end
 
     % Process in time bins
@@ -70,8 +72,9 @@ for pairIdx = 1:size(workerPairs, 1)
         segmentSpikesNeuron2 = [spikesNeuron2.spikes{firstSession:lastSession}];
 
         % Compute cross-correlation
-        [crossCorr, lagValues] = xcorr(segmentSpikesNeuron2,segmentSpikesNeuron1,baselineMaxLag);
-        thr = 4000;
+        [crossCorr, lagValues_samp] = xcorr(segmentSpikesNeuron2,segmentSpikesNeuron1,baselineMaxLag);
+        lagValues = lagValues_samp * milliseconds(spikesNeuron2.tbin);
+        thr = 2 * baselineMaxLag;
         if sum(crossCorr) < thr
             continue
         end
@@ -82,7 +85,7 @@ for pairIdx = 1:size(workerPairs, 1)
         lagValuesNoZero = lagValues(nonZeroLagIdx);
 
         % Define baseline lag ranges
-        baselinePosLags = 100:baselineMaxLag;
+        baselinePosLags = 10:baselineMaxLag;
         baselineNegLags = -baselinePosLags(end:-1:1);
         baselineIdxs = ismember(lagValuesNoZero, [baselineNegLags, baselinePosLags]);
 
@@ -92,21 +95,23 @@ for pairIdx = 1:size(workerPairs, 1)
         baselineStd = std(baselineValues);
 
         % Calculate theoretical max-window extrema
-        expectedMax = baselineMean + baselineStd * sqrt(2 * log(centralWindowSize));
-        expectedMin = baselineMean - baselineStd * sqrt(2 * log(centralWindowSize));
-        varianceExtrema = baselineStd^2 / (2 * log(centralWindowSize));
+        scalingFactor = sqrt(2 * log(centralWindowSize));
+        windowCorrection = baselineStd * scalingFactor;
+
+        stdExtrema = baselineStd / scalingFactor;
+
+        expectedMax = baselineMean + windowCorrection;
+        expectedMin = baselineMean - windowCorrection;
 
         % Positive lags
         [zscorePosMax(neuronPair(1), neuronPair(2), timeGroupIdx), ...
             lagPosMax(neuronPair(1), neuronPair(2), timeGroupIdx)] = ...
-            computeExtrema(crossCorrNoZero, lagValuesNoZero, 1:centralWindowSize, expectedMax, expectedMin, varianceExtrema);
+            computeExtrema(crossCorrNoZero, lagValuesNoZero, [1 centralWindowSize_ms], expectedMax, expectedMin, stdExtrema);
 
         % Negative lags
         [zscoreNegMax(neuronPair(1), neuronPair(2), timeGroupIdx), ...
             lagNegMax(neuronPair(1), neuronPair(2), timeGroupIdx)] = ...
-            computeExtrema(crossCorrNoZero, lagValuesNoZero, -(centralWindowSize:-1:1), expectedMax, expectedMin, varianceExtrema);
-
-        zscorePosMax(neuronPair(1), neuronPair(2), timeGroupIdx)
+            computeExtrema(crossCorrNoZero, lagValuesNoZero, [-centralWindowSize_ms -1], expectedMax, expectedMin, stdExtrema);
     end
 end
 
@@ -116,23 +121,31 @@ logMessage('Results saved successfully.\n');
 end
 
 
-function [zFinal, lagFinal] = computeExtrema(ccf, lags, lagRange, expectedMax, expectedMin, varExtrema)
+function [zFinal, lagFinal] = computeExtrema(ccf, lags, lagRange, expectedMax, expectedMin, stdExtrema)
 % Compute z-scores and find extrema for a specified lag range
-lagIndices = ismember(lags, lagRange);          % Find indices for the specific lag range
+lagIndices = iswithin(lags, lagRange');          % Find indices for the specific lag range
 lagValues = lags(lagIndices);                   % Extract lag values within the range
 crossCorrValues = ccf(lagIndices);              % Extract cross-correlation values for the range
 
 % Compute z-scores for positive and negative lags
-zScoresPos = (crossCorrValues - expectedMax) / sqrt(varExtrema);
-zScoresNeg = (crossCorrValues - expectedMin) / sqrt(varExtrema);
+zScoresPos = (crossCorrValues - expectedMax) / stdExtrema;
+zScoresNeg = (crossCorrValues - expectedMin) / stdExtrema;
+
+zScores = zScoresPos; zScores(zScoresNeg < 0) = zScoresNeg(zScoresNeg < 0);
+zScores(abs(zScores) < 2) = 0; zScores(zScoresPos .* zScoresNeg < 0) = 0;
+
+[peaks,locs] = findpeaks(zScores);
+locs = lagValues(locs);
+peaks(abs(locs) >= 6) = 0;
+locs(abs(locs) >= 6) = 0;
 
 % Find maxima and their indices
-[zMaxPos, idxMaxPos] = max(zScoresPos);         % Maximum positive z-score
-[zMaxNeg, idxMaxNeg] = min(zScoresNeg);    % Maximum negative z-score (absolute value)
+[zMaxPos, idxMaxPos] = max(peaks);         % Maximum positive z-score
+[zMaxNeg, idxMaxNeg] = min(peaks);         % Maximum negative z-score (absolute value)
 
 % Get corresponding lags
-lagMaxPos = lagValues(idxMaxPos);
-lagMaxNeg = lagValues(idxMaxNeg);
+lagMaxPos = locs(idxMaxPos);
+lagMaxNeg = locs(idxMaxNeg);
 
 % Threshold for determining significance
 threshold = 5;
@@ -140,9 +153,12 @@ threshold = 5;
 % Check if both extrema are above the threshold
 extremumCheck = [abs(zMaxPos), abs(zMaxNeg)];
 
-if ~all(extremumCheck > threshold)
+if all(isempty([zMaxPos,zMaxNeg]))
+    zFinal = 0;
+    lagFinal = 0;
+elseif ~all(extremumCheck > threshold)
     % If not both extrema are high, return the dominant one
-    if abs(zMaxNeg) > abs(zMaxPos)
+    if abs(zMaxNeg) > abs(zMaxPos) || isempty(zMaxPos)
         zFinal = zMaxNeg;
         lagFinal = lagMaxNeg;
     else
@@ -154,6 +170,7 @@ else
     zFinal = NaN;
     lagFinal = NaN;
 end
+[zFinal,lagFinal]
 end
 
 
