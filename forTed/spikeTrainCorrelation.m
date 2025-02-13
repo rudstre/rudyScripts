@@ -74,7 +74,7 @@ for pairIdx = 1:size(workerPairs, 1)
         % Compute cross-correlation
         [crossCorr, lagValues_samp] = xcorr(segmentSpikesNeuron2, segmentSpikesNeuron1, baselineMaxLag);
         lagValues = lagValues_samp * milliseconds(spikesNeuron2.tbin);        
-        
+
         % Define baseline lag ranges
         baselinePosLags = 10:baselineMaxLag;
         baselineNegLags = -baselinePosLags(end:-1:1);
@@ -236,6 +236,7 @@ if isempty(posPeaks)
     lagMaxPos = 0;
 else
     [zMaxPos, idxPos] = max(posPeaks);  % largest positive z
+    zMaxPos = max(zMaxPos - biasP, 0);
     lagMaxPos = posLags(idxPos);
 end
 
@@ -246,11 +247,12 @@ if isempty(negPeaks)
 else
     % For negative z, the most extreme is the minimum value.
     [zMaxNeg, idxNeg] = min(negPeaks);
+    zMaxNeg = min(zMaxNeg + biasN, 0);
     lagMaxNeg = negLags(idxNeg);
 end
 
 %% Threshold logic to choose the final extreme
-threshold = 3; % significance threshold
+threshold = 2; % significance threshold
 
 % If both extremes are zero, return zero.
 if (zMaxPos == 0 && zMaxNeg == 0)
@@ -259,10 +261,10 @@ if (zMaxPos == 0 && zMaxNeg == 0)
 elseif ~all([abs(zMaxPos), abs(zMaxNeg)] > threshold)
     % If only one extreme is above threshold, choose the dominant one.
     if abs(zMaxNeg) > abs(zMaxPos) || zMaxPos == 0
-        zFinal = zMaxNeg + biasN;
+        zFinal = zMaxNeg;
         lagFinal = lagMaxNeg;
     else
-        zFinal = zMaxPos - biasP;
+        zFinal = zMaxPos;
         lagFinal = lagMaxPos;
     end
 else
@@ -271,12 +273,6 @@ else
     lagFinal = NaN;
 end
 
-if abs(zFinal) < biasP
-    zFinal = 0;
-    lagFinal = 0;
-end
-
-[zFinal, lagFinal]
 end
 
 function [spikes, queue] = loadFromCache(cache, queue, unitId, spikePath, maxCacheSize)
