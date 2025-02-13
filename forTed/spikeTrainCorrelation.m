@@ -72,46 +72,31 @@ for pairIdx = 1:size(workerPairs, 1)
         segmentSpikesNeuron2 = [spikesNeuron2.spikes{firstSession:lastSession}];
 
         % Compute cross-correlation
-        [crossCorr, lagValues_samp] = xcorr(segmentSpikesNeuron2,segmentSpikesNeuron1,baselineMaxLag);
-        lagValues = lagValues_samp * milliseconds(spikesNeuron2.tbin);
-        thr = 2 * baselineMaxLag;
-        if sum(crossCorr) < thr
-            continue
-        end
-
-        % Exclude zero lag
-        nonZeroLagIdx = lagValues ~= 0;
-        crossCorrNoZero = crossCorr(nonZeroLagIdx);
-        lagValuesNoZero = lagValues(nonZeroLagIdx);
-
+        [crossCorr, lagValues_samp] = xcorr(segmentSpikesNeuron2, segmentSpikesNeuron1, baselineMaxLag);
+        lagValues = lagValues_samp * milliseconds(spikesNeuron2.tbin);        
+        
         % Define baseline lag ranges
         baselinePosLags = 10:baselineMaxLag;
         baselineNegLags = -baselinePosLags(end:-1:1);
-        baselineIdxs = ismember(lagValuesNoZero, [baselineNegLags, baselinePosLags]);
+        baselineIdxs = ismember(lagValues, [baselineNegLags, baselinePosLags]);
 
         % Calculate baseline statistics
-        baselineValues = crossCorrNoZero(baselineIdxs);
-        baselineMean = mean(baselineValues);
-        baselineStd = std(baselineValues);
-
-        % Calculate theoretical max-window extrema
-        scalingFactor = sqrt(2 * log(centralWindowSize));
-        windowCorrection = baselineStd * scalingFactor;
-
-        stdExtrema = baselineStd / scalingFactor;
-
-        expectedMax = baselineMean + windowCorrection;
-        expectedMin = baselineMean - windowCorrection;
+        baselineValues = crossCorr(baselineIdxs);
+        % Under the Poisson model, the mean of the baseline is our lambda
+        lambda = mean(baselineValues);
+        if lambda < 2
+            continue
+        end
 
         % Positive lags
         [zscorePosMax(neuronPair(1), neuronPair(2), timeGroupIdx), ...
             lagPosMax(neuronPair(1), neuronPair(2), timeGroupIdx)] = ...
-            computeExtrema(crossCorrNoZero, lagValuesNoZero, [1 centralWindowSize_ms], expectedMax, expectedMin, stdExtrema);
+            computeExtrema(crossCorr, lagValues, [0 centralWindowSize_ms], lambda, 3);
 
         % Negative lags
         [zscoreNegMax(neuronPair(1), neuronPair(2), timeGroupIdx), ...
             lagNegMax(neuronPair(1), neuronPair(2), timeGroupIdx)] = ...
-            computeExtrema(crossCorrNoZero, lagValuesNoZero, [-centralWindowSize_ms -1], expectedMax, expectedMin, stdExtrema);
+            computeExtrema(crossCorr, lagValues, [-centralWindowSize_ms 0], lambda, 3);
     end
 end
 
@@ -121,58 +106,178 @@ logMessage('Results saved successfully.\n');
 end
 
 
-function [zFinal, lagFinal] = computeExtrema(ccf, lags, lagRange, expectedMax, expectedMin, stdExtrema)
-% Compute z-scores and find extrema for a specified lag range
-lagIndices = iswithin(lags, lagRange');          % Find indices for the specific lag range
-lagValues = lags(lagIndices);                   % Extract lag values within the range
-crossCorrValues = ccf(lagIndices);              % Extract cross-correlation values for the range
+function [zFinal, lagFinal] = computeExtrema(ccf, lags, lagRange, lambda, windowSize)
+% computeExtremaPoissonMinMaxPeaks
+%
+%   [zFinal, lagFinal] = computeExtremaPoissonMinMaxPeaks(ccf, lags, lagRange, lambda, windowSize)
+%
+%   This function computes extreme z-scores for cross-correlation counts using a Poisson model.
+%
+%   For excitation (positive deviations):  
+%       For each bin in the specified lag range (with |lag| < 6), if the count exceeds
+%       lambda, compute an upper-tail p-value:
+%           p = 1 - poisscdf(x-1, lambda)
+%       and convert it to a z-score with norminv.
+%
+%   For inhibition (negative deviations):  
+%       A sliding window (of size windowSize) is applied. For each window, if the sum of
+%       counts is less than the expected sum (windowSize*lambda), compute a lower-tail
+%       p-value:
+%           p = poisscdf(windowSum, windowSize*lambda)
+%       and convert that to a z-score.
+%
+%   Then, the function uses findpeaks to pick out local extrema on both sides.
+%
+%   Inputs:
+%     ccf        - Cross-correlation counts (vector)
+%     lags       - Corresponding lag values (vector)
+%     lagRange   - Two-element vector [minLag maxLag] specifying the lag range of interest
+%     lambda     - Expected Poisson rate per bin (baseline estimate)
+%     windowSize - Number of bins for the sliding-window inhibition test (e.g., 3)
+%
+%   Outputs:
+%     zFinal     - Final extreme z-score (positive for excitation, negative for inhibition;
+%                  if both are significant, returns NaN to indicate ambiguity)
+%     lagFinal   - Lag at which the extreme effect is observed
 
-% Compute z-scores for positive and negative lags
-zScoresPos = (crossCorrValues - expectedMax) / stdExtrema;
-zScoresNeg = (crossCorrValues - expectedMin) / stdExtrema;
+%% Restrict to specified lag range and |lag| < 6
+idx = iswithin(lags, lagRange');  % get indices in lagRange
+lags_sub = lags(idx);
+ccf_sub  = ccf(idx);
 
-zScores = zScoresPos; zScores(zScoresNeg < 0) = zScoresNeg(zScoresNeg < 0);
-zScores(abs(zScores) < 2) = 0; zScores(zScoresPos .* zScoresNeg < 0) = 0;
+Np = 5;
+Nn = 4;
+biasP = sqrt(2 * log(Np));
+biasN = sqrt(2 * log(Nn));
 
-[peaks,locs] = findpeaks(zScores);
-locs = lagValues(locs);
-peaks(abs(locs) >= 6) = 0;
-locs(abs(locs) >= 6) = 0;
+% Further restrict to |lag| < 6
+% validIdx = iswithin(abs(lags_sub), 1, 6);
+% lags_sub = lags_sub(validIdx);
+% ccf_sub  = ccf_sub(validIdx);
 
-% Find maxima and their indices
-[zMaxPos, idxMaxPos] = max(peaks);         % Maximum positive z-score
-[zMaxNeg, idxMaxNeg] = min(peaks);         % Maximum negative z-score (absolute value)
+%% Positive side: per-bin z-scores for excitation
+zPos = zeros(size(ccf_sub));
+for i = 1:length(ccf_sub)
+    x = ccf_sub(i);
+    if x > lambda
+        % Compute upper-tail p-value for count x
+        p = 1 - poisscdf(x-1, lambda);
+        p = max(p, 1e-10); % avoid p==0
+        % Convert to z-score (small p gives high positive z)
+        zPos(i) = norminv(1 - p);
+    else
+        zPos(i) = 0;
+    end
+end
 
-% Get corresponding lags
-lagMaxPos = locs(idxMaxPos);
-lagMaxNeg = locs(idxMaxNeg);
+% Use findpeaks to locate local positive extrema
+[posPeaks, posPeakIdx] = findpeaks([0 zPos]);
+posLags = lags_sub(posPeakIdx - 1);
 
-% Threshold for determining significance
-threshold = 5;
+validIdxs = iswithin(posLags,1,5);
+posLags = posLags(validIdxs);
+posPeaks = posPeaks(validIdxs);
 
-% Check if both extrema are above the threshold
-extremumCheck = [abs(zMaxPos), abs(zMaxNeg)];
+%% Negative side: sliding window for inhibition
+nBins = length(ccf_sub);
+if nBins < windowSize
+    % Not enough bins for a sliding window: return empty
+    zNeg = [];
+    negLags = [];
+else
+    nWindows = nBins - windowSize + 1;
+    zNeg = zeros(nWindows, 1);
+    negLags = zeros(nWindows, 1);
+    
+    for i = 1:nWindows
+        windowData = ccf_sub(i:i+windowSize-1);
+        windowSum = sum(windowData);
+        expectedWindow = windowSize * lambda;
+        
+        if windowSum < expectedWindow
+            % Compute lower-tail p-value for window sum
+            pNeg = poisscdf(windowSum, expectedWindow);
+            pNeg = max(pNeg, 1e-10);
+            zTemp = norminv(pNeg);
+            % Ensure zTemp is negative; if not, set to zero.
+            if zTemp < 0
+                zNeg(i) = zTemp;
+            else
+                zNeg(i) = 0;
+            end
+        else
+            zNeg(i) = 0;
+        end
+        % Representative lag for the window: the center of the window.
+        negLags(i) = mean(lags_sub(i:i+windowSize-1));
+    end
+end
 
-if all(isempty([zMaxPos,zMaxNeg]))
+% Use findpeaks to locate local minima in the negative side.
+% We do this by applying findpeaks to the negative of the zNeg vector.
+if ~isempty(zNeg)
+    [negPeaks, negPeakIdx] = findpeaks(-zNeg);
+    % Convert back to negative z-scores:
+    negPeaks = -negPeaks;
+    negLags = negLags(negPeakIdx);
+
+    validIdxs = iswithin(negLags,1,5);
+    negLags = negLags(validIdxs);
+    negPeaks = negPeaks(validIdxs);
+else
+    negPeaks = [];
+    negLags = [];
+end
+
+%% Determine the extreme values
+% Positive extreme
+if isempty(posPeaks)
+    zMaxPos = 0;
+    lagMaxPos = 0;
+else
+    [zMaxPos, idxPos] = max(posPeaks);  % largest positive z
+    lagMaxPos = posLags(idxPos);
+end
+
+% Negative extreme
+if isempty(negPeaks)
+    zMaxNeg = 0;
+    lagMaxNeg = 0;
+else
+    % For negative z, the most extreme is the minimum value.
+    [zMaxNeg, idxNeg] = min(negPeaks);
+    lagMaxNeg = negLags(idxNeg);
+end
+
+%% Threshold logic to choose the final extreme
+threshold = 3; % significance threshold
+
+% If both extremes are zero, return zero.
+if (zMaxPos == 0 && zMaxNeg == 0)
     zFinal = 0;
     lagFinal = 0;
-elseif ~all(extremumCheck > threshold)
-    % If not both extrema are high, return the dominant one
-    if abs(zMaxNeg) > abs(zMaxPos) || isempty(zMaxPos)
-        zFinal = zMaxNeg;
+elseif ~all([abs(zMaxPos), abs(zMaxNeg)] > threshold)
+    % If only one extreme is above threshold, choose the dominant one.
+    if abs(zMaxNeg) > abs(zMaxPos) || zMaxPos == 0
+        zFinal = zMaxNeg + biasN;
         lagFinal = lagMaxNeg;
     else
-        zFinal = zMaxPos;
+        zFinal = zMaxPos - biasP;
         lagFinal = lagMaxPos;
     end
 else
-    % If both extrema are high, do not oversimplify — return NaN
+    % If both exceed threshold, the result is ambiguous.
     zFinal = NaN;
     lagFinal = NaN;
 end
-[zFinal,lagFinal]
+
+if abs(zFinal) < biasP
+    zFinal = 0;
+    lagFinal = 0;
 end
 
+[zFinal, lagFinal]
+end
 
 function [spikes, queue] = loadFromCache(cache, queue, unitId, spikePath, maxCacheSize)
 % Retrieve spikes from cache or load from file if not cached
