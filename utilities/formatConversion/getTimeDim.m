@@ -1,10 +1,15 @@
-function dim = getTimeDim(timeseries)
+function timeDim = getTimeDim(data)
+% Identify the time dimension in a multi-dimensional dataset
 
-sz_time = size(timeseries);
-[~,dim] = max(size(sz_time));
+dataSize = size(data);
+[~, timeDim] = max(dataSize);  % Assume the largest dimension is time
 
-ratios = sz_time(dim)./sz_time; ratios(dim) = [];
+% Compute ratios of the time dimension size to other dimensions
+sizeRatios = dataSize(timeDim) ./ dataSize;
+sizeRatios(timeDim) = [];  % Exclude the time dimension itself
 
-if any(ratios < 3)
-    error('Can''t tell!')
+% Ensure the time dimension is significantly larger than others
+if any(sizeRatios < 3)
+    error('Cannot determine the time dimension reliably.')
+end
 end
