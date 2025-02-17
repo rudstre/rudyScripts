@@ -91,12 +91,12 @@ for pairIdx = 1:size(workerPairs, 1)
         % Positive lags
         [zscorePosMax(neuronPair(1), neuronPair(2), timeGroupIdx), ...
             lagPosMax(neuronPair(1), neuronPair(2), timeGroupIdx)] = ...
-            computeExtrema(crossCorr, lagValues, [0 centralWindowSize_ms], lambda, 3);
+            computeExtrema(crossCorr, lagValues, [0 centralWindowSize], lambda, 3);
 
         % Negative lags
         [zscoreNegMax(neuronPair(1), neuronPair(2), timeGroupIdx), ...
             lagNegMax(neuronPair(1), neuronPair(2), timeGroupIdx)] = ...
-            computeExtrema(crossCorr, lagValues, [-centralWindowSize_ms 0], lambda, 3);
+            computeExtrema(crossCorr, lagValues, [-centralWindowSize 0], lambda, 3);
     end
 end
 
@@ -141,53 +141,68 @@ function [zFinal, lagFinal] = computeExtrema(ccf, lags, lagRange, lambda, window
 %     lagFinal   - Lag at which the extreme effect is observed
 
 %% Restrict to specified lag range and |lag| < 6
+%% (Assumes: lags, lagRange, ccf, lambda, windowSize are defined)
+
+% Get indices in lagRange, then extend slightly.
 idx = iswithin(lags, lagRange');  % get indices in lagRange
 lags_sub = lags(idx);
+lags_sub = [lagRange(1) - 1, lags_sub, lags_sub(end) + 1];
 ccf_sub  = ccf(idx);
 
-Np = 5;
-Nn = 4;
+% Bias corrections (unchanged)
+Np = 5; 
 biasP = sqrt(2 * log(Np));
+Nn = 4; 
 biasN = sqrt(2 * log(Nn));
 
-% Further restrict to |lag| < 6
-% validIdx = iswithin(abs(lags_sub), 1, 6);
-% lags_sub = lags_sub(validIdx);
-% ccf_sub  = ccf_sub(validIdx);
+threshold = 2; % significance threshold
 
 %% Positive side: per-bin z-scores for excitation
+
+zApprox = @(x,lmbda) sqrt(-2 * (-lmbda - x*log(x/lmbda) + x - .5*log(2*pi*x)));
+
 zPos = zeros(size(ccf_sub));
 for i = 1:length(ccf_sub)
     x = ccf_sub(i);
     if x > lambda
-        % Compute upper-tail p-value for count x
+        % First try to compute the exact upper-tail p-value.
         p = 1 - poisscdf(x-1, lambda);
-        p = max(p, 1e-10); % avoid p==0
-        % Convert to z-score (small p gives high positive z)
-        zPos(i) = norminv(1 - p);
+        if p > 0
+            % Exact computation is possible.
+            zPos(i) = norminv(1 - p);
+        else
+            % p underflowed; use asymptotic approximation.
+            zPos(i) = zApprox(x,lambda);
+        end
     else
         zPos(i) = 0;
     end
 end
 
-% Use findpeaks to locate local positive extrema
-[posPeaks, posPeakIdx] = findpeaks([0 zPos]);
-posLags = lags_sub(posPeakIdx - 1);
+if median(zPos) > threshold
+    zFinal = nan;
+    lagFinal = nan;
+    return
+end
 
-validIdxs = iswithin(posLags,1,5);
+% Use findpeaks to locate local positive extrema.
+[posPeaks, posPeakIdx] = findpeaks([0 zPos 0]);
+posLags = lags_sub(posPeakIdx);
+
+validIdxs = iswithin(abs(posLags), 1, 5);
 posLags = posLags(validIdxs);
 posPeaks = posPeaks(validIdxs);
 
 %% Negative side: sliding window for inhibition
 nBins = length(ccf_sub);
 if nBins < windowSize
-    % Not enough bins for a sliding window: return empty
+    % Not enough bins for a sliding window: return empty.
     zNeg = [];
     negLags = [];
 else
     nWindows = nBins - windowSize + 1;
-    zNeg = zeros(nWindows, 1);
-    negLags = zeros(nWindows, 1);
+    zNeg = zeros(1, nWindows);
+    negLags = zeros(1, nWindows);
     
     for i = 1:nWindows
         windowData = ccf_sub(i:i+windowSize-1);
@@ -195,10 +210,15 @@ else
         expectedWindow = windowSize * lambda;
         
         if windowSum < expectedWindow
-            % Compute lower-tail p-value for window sum
+            % Try to compute the lower-tail p-value exactly.
             pNeg = poisscdf(windowSum, expectedWindow);
-            pNeg = max(pNeg, 1e-10);
-            zTemp = norminv(pNeg);
+            if pNeg > 0
+                zTemp = norminv(pNeg);
+            else
+                % pNeg underflowed; use asymptotic approximation.
+                zTemp = zApprox(x,lambda);
+            end
+            
             % Ensure zTemp is negative; if not, set to zero.
             if zTemp < 0
                 zNeg(i) = zTemp;
@@ -208,20 +228,22 @@ else
         else
             zNeg(i) = 0;
         end
+        
         % Representative lag for the window: the center of the window.
         negLags(i) = mean(lags_sub(i:i+windowSize-1));
     end
 end
+negLags(end+1:end+2) = negLags(end) + [1 2];
 
-% Use findpeaks to locate local minima in the negative side.
+% Use findpeaks to locate local minima on the negative side.
 % We do this by applying findpeaks to the negative of the zNeg vector.
 if ~isempty(zNeg)
-    [negPeaks, negPeakIdx] = findpeaks(-zNeg);
+    [negPeaks, negPeakIdx] = findpeaks([0 -zNeg 0]);
     % Convert back to negative z-scores:
     negPeaks = -negPeaks;
     negLags = negLags(negPeakIdx);
 
-    validIdxs = iswithin(negLags,1,5);
+    validIdxs = iswithin(abs(negLags), 1, 5);
     negLags = negLags(validIdxs);
     negPeaks = negPeaks(validIdxs);
 else
@@ -252,27 +274,27 @@ else
 end
 
 %% Threshold logic to choose the final extreme
-threshold = 2; % significance threshold
 
-% If both extremes are zero, return zero.
-if (zMaxPos == 0 && zMaxNeg == 0)
+% If both extremes are below threshold, return zero.
+if all(abs([zMaxPos, zMaxNeg]) < 1)
     zFinal = 0;
     lagFinal = 0;
-elseif ~all([abs(zMaxPos), abs(zMaxNeg)] > threshold)
+elseif all(abs([zMaxPos, zMaxNeg]) > threshold)
+    % If both exceed threshold, the result is ambiguous.
+    zFinal = NaN;
+    lagFinal = NaN;
+else
     % If only one extreme is above threshold, choose the dominant one.
-    if abs(zMaxNeg) > abs(zMaxPos) || zMaxPos == 0
+    if abs(zMaxNeg) > abs(zMaxPos)
         zFinal = zMaxNeg;
         lagFinal = lagMaxNeg;
     else
         zFinal = zMaxPos;
         lagFinal = lagMaxPos;
     end
-else
-    % If both exceed threshold, the result is ambiguous.
-    zFinal = NaN;
-    lagFinal = NaN;
 end
 
+[zFinal lagFinal]
 end
 
 function [spikes, queue] = loadFromCache(cache, queue, unitId, spikePath, maxCacheSize)
