@@ -213,32 +213,28 @@ else
             % Try to compute the lower-tail p-value exactly.
             pNeg = poisscdf(windowSum, expectedWindow);
             if pNeg > 0
-                zTemp = norminv(pNeg);
+                zNeg(i) = norminv(pNeg);
             else
                 % pNeg underflowed; use asymptotic approximation.
-                zTemp = zApprox(x,lambda);
-            end
-            
-            % Ensure zTemp is negative; if not, set to zero.
-            if zTemp < 0
-                zNeg(i) = zTemp;
-            else
-                zNeg(i) = 0;
+                zNeg(i) = -zApprox(max(windowSum,1/(windowSize+1)),expectedWindow);
             end
         else
             zNeg(i) = 0;
         end
         
         % Representative lag for the window: the center of the window.
-        negLags(i) = mean(lags_sub(i:i+windowSize-1));
+        negLags(i) = mean(lags_sub(i:i+windowSize-1) + 1);
     end
 end
-negLags(end+1:end+2) = negLags(end) + [1 2];
+negLags = [negLags(1) - 1 negLags negLags(end) + 1];
 
 % Use findpeaks to locate local minima on the negative side.
 % We do this by applying findpeaks to the negative of the zNeg vector.
 if ~isempty(zNeg)
-    [negPeaks, negPeakIdx] = findpeaks([0 -zNeg 0]);
+    zNegWvfm = [0 -zNeg 0];
+    negPeakIdx = find(islocalmax(zNegWvfm, 'FlatSelection', 'center'));
+    negPeaks = zNegWvfm(negPeakIdx);
+    
     % Convert back to negative z-scores:
     negPeaks = -negPeaks;
     negLags = negLags(negPeakIdx);
