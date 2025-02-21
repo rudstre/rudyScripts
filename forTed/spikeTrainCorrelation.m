@@ -15,7 +15,7 @@ options = load(optPath).opt;
 pairsToProcess = options.pairs;
 binSize = 4;%options.binning;
 centralWindowSize_ms = 10;%options.central_window;
-baselineMaxLag_ms = 1000;%options.max_lag;
+baselineMaxLag_ms = 50;%options.max_lag;
 
 % Assign pairs to the current worker
 pairGroups = generatePairGroups(max(pairsToProcess(:)), totalWorkers);
@@ -91,12 +91,12 @@ for pairIdx = 1:size(workerPairs, 1)
         % Positive lags
         [zscorePosMax(neuronPair(1), neuronPair(2), timeGroupIdx), ...
             lagPosMax(neuronPair(1), neuronPair(2), timeGroupIdx)] = ...
-            computeExtrema(crossCorr, lagValues, [0 centralWindowSize], lambda, 3);
+            computeExtrema(crossCorr, lagValues, [0 centralWindowSize], lambda, 2);
 
         % Negative lags
         [zscoreNegMax(neuronPair(1), neuronPair(2), timeGroupIdx), ...
             lagNegMax(neuronPair(1), neuronPair(2), timeGroupIdx)] = ...
-            computeExtrema(crossCorr, lagValues, [-centralWindowSize 0], lambda, 3);
+            computeExtrema(crossCorr, lagValues, [-centralWindowSize 0], lambda, 2);
     end
 end
 
@@ -179,15 +179,19 @@ for i = 1:length(ccf_sub)
     end
 end
 
-if median(zPos) > threshold
-    zFinal = nan;
-    lagFinal = nan;
-    return
-end
-
 % Use findpeaks to locate local positive extrema.
 [posPeaks, posPeakIdx] = findpeaks([0 zPos 0]);
 posLags = lags_sub(posPeakIdx);
+
+[maxPeak,maxPeakLoc] = max(posPeaks);
+if lags_sub(posPeakIdx(maxPeakLoc)) == 0 
+    posPeaksNoZero = posPeaks; posPeaksNoZero(maxPeakLoc) = [];
+    if maxPeak > 20 && all(posPeaksNoZero/maxPeak < .1)
+        zFinal = nan;
+        lagFinal = nan;
+        return
+    end
+end
 
 validIdxs = iswithin(abs(posLags), 1, 5);
 posLags = posLags(validIdxs);
@@ -239,7 +243,7 @@ if ~isempty(zNeg)
     negPeaks = -negPeaks;
     negLags = negLags(negPeakIdx);
 
-    validIdxs = iswithin(abs(negLags), 1, 5);
+    validIdxs = iswithin(abs(negLags), 0, 5);
     negLags = negLags(validIdxs);
     negPeaks = negPeaks(validIdxs);
 else
@@ -275,7 +279,7 @@ end
 if all(abs([zMaxPos, zMaxNeg]) < 1)
     zFinal = 0;
     lagFinal = 0;
-elseif all(abs([zMaxPos, zMaxNeg]) > threshold)
+elseif all(abs([zMaxPos, zMaxNeg]) > threshold) && iswithin(abs(zMaxPos/zMaxNeg),.5,2)
     % If both exceed threshold, the result is ambiguous.
     zFinal = NaN;
     lagFinal = NaN;
@@ -290,7 +294,6 @@ else
     end
 end
 
-[zFinal lagFinal]
 end
 
 function [spikes, queue] = loadFromCache(cache, queue, unitId, spikePath, maxCacheSize)
