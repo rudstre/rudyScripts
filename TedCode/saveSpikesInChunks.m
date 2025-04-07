@@ -1,4 +1,4 @@
-function spikes = saveSpikesInChunks(timeResolution, spikeTrainPath)
+function saveSpikesInChunks(timeResolution, spikeTrainPath)
 % SAVESPIKESINCHUNKS Loads a compiled spike train, processes it into binned spikes,
 % and saves the results in separate .mat files.
 %
@@ -60,7 +60,11 @@ for s = 1:numSessions
 
         % Save the current session's spikes for this neuron
         eval(sprintf('%s = spikes(n);', varname)); % Dynamically assign spikes to the variable
-        save(fp, varname, "-append"); % Append to the neuron's file
+        if isfile(fp)
+            save(fp, varname,'-append'); % Append to the neuron's file
+        else
+            save(fp, varname);
+        end
         clear(varname); % Clear the variable to free memory
     end
 end

@@ -29,35 +29,35 @@ for i = 1:length(files)
     ln = data.lagNeg;
     lp = data.lagPos;
 
-    % Replace NaNs with 0 in all arrays
-    zn(isnan(zn)) = 0;
-    zp(isnan(zp)) = 0;
-    ln(isnan(ln)) = 0;
-    lp(isnan(lp)) = 0;
-
     % If this is the first file, initialize the cumulative arrays
     if ~exist('zneg','var')
-        [zneg, zpos, lneg, lpos] = deal(zeros(size(zn)));
+        [zneg, zpos, lneg, lpos] = deal(NaN(size(zn)));
     end
+
+    znNaN = all(isnan(cat(4,zneg, zn)),4);
+    zpNaN = all(isnan(cat(4,zpos, zp)),4);
+    lpNaN = all(isnan(cat(4,lpos, lp)),4);
+    lnNaN = all(isnan(cat(4,lneg, ln)),4);
 
     % Add current file's data to the cumulative arrays
     if isempty(zn)
         continue
     end
-    zneg = zneg + zn;
-    zpos = zpos + zp;
-    lneg = lneg + ln;
-    lpos = lpos + lp;
+    zneg = nansum(cat(4,zneg,zn),4); zneg(znNaN) = NaN;
+    zpos = nansum(cat(4,zpos,zp),4); zpos(zpNaN) = NaN;
+    lneg = nansum(cat(4,lneg,ln),4); lneg(lnNaN) = NaN;
+    lpos = nansum(cat(4,lpos,lp),4); lpos(lpNaN) = NaN;
+
 end
 
 % Adding reverse pairs to matrix
-[x, y, z] = ind2sub(size(zneg), find(zneg == 0));
+[x, y, z] = ind2sub(size(zneg), find(isnan(zneg)));
 for i = 1:length(x)
     xi = x(i);
     yi = y(i);
     zi = z(i);
 
-    if any([zneg(xi, yi, zi), zpos(xi, yi, zi)])
+    if any(~isnan([zneg(xi, yi, zi), zpos(xi, yi, zi)]))
         continue
     end
 
@@ -69,13 +69,6 @@ for i = 1:length(x)
     lpos(xi, yi, zi) = -lneg(yi, xi, zi);
     lneg(xi, yi, zi) = -lpos(yi, xi, zi);
 end
-
-% Convert zeros or infinities back into NaNs.
-% This step ensures that invalid or missing data are clearly marked as NaN.
-zneg(~zneg | isinf(abs(zneg))) = nan;
-zpos(~zpos | isinf(abs(zpos))) = nan;
-lneg(~lneg | isinf(abs(lneg))) = nan;
-lpos(~lpos | isinf(abs(lpos))) = nan;
 
 % Store the final combined results into the output structure
 res.zneg = zneg;
