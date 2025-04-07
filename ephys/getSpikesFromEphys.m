@@ -48,6 +48,8 @@ if nargin < 2
     impedances = [];
 end
 
+impedanceThresh = 5e6;
+
 %% Determine the sign based on the desired detection direction
 % Assign a sign multiplier based on the specified detection direction
 switch detectionDirection
@@ -117,7 +119,7 @@ for validIdx = 1:length(validChannels)
     title(sprintf('Channel %d', channelIdx))
 
     % Mark channels with high impedances
-    if ~isempty(impedances) && impedances(channelIdx) > 5e6
+    if ~isempty(impedances) && impedances(channelIdx) > impedanceThresh
         set(gca,'Color',[1,.7,.7])
     end
 end

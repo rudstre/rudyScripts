@@ -1,8 +1,10 @@
-function timeseries_new = timeseriesFormat(timeseries)
-dim_t = getTimeDim(timeseries);
+function reorderedData = timeseriesFormat(data)
+% Reorder dimensions so the time dimension comes first
 
-sz_data = size(timeseries);
-dim_order = 1:length(sz_data); 
-dim_order(dim_order == dim_t) = []; dim_order = [dim_t dim_order];
+timeDim = getTimeDim(data);  % Identify the time dimension
+dimOrder = 1:ndims(data);
+dimOrder(dimOrder == timeDim) = [];
+dimOrder = [timeDim, dimOrder];  % Move time dimension to the first position
 
-timeseries_new = permute(timeseries,dim_order);
+reorderedData = permute(data, dimOrder);
+end

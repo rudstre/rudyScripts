@@ -1,21 +1,29 @@
 function [acc_pow, ephys_dec, dio] = readRHDandDownsample(filename, shift, chunkSize)
-    % Read and process data from an RHD file, including downsampling ephys data
-    %
-    % Inputs:
-    %   filename: Name of the RHD file to read
-    %   shift: Starting point for reading data
-    %   chunkSize: Size of the data chunk to read
-    %
-    % Outputs:
-    %   acc_pow: Power of the accelerometer data in the 3-5 Hz range
-    %   ephys_dec: Downsampled electrophysiological data
-    %   dio: Digital input/output data
+% Read and process data from an RHD file, including downsampling ephys data
+%
+% Inputs:
+%   filename: Name of the RHD file to read
+%   shift: Starting point for reading data
+%   chunkSize: Size of the data chunk to read
+%
+% Outputs:
+%   acc_pow: Power of the accelerometer data in the 3-5 Hz range
+%   ephys_dec: Downsampled electrophysiological data
+%   dio: Digital input/output data
 
-    % Extract current chunk of data from RHD file
+% Extract current chunk of data from RHD file
+oldFormat = false;
+if oldFormat
     fid = fopen(filename);
     [ephys, acc, ~, ~, dio] = readRHD_oldFormat(fid, shift, chunkSize, 64);
     fclose(fid);
+else
+    read_Intan_RHD2000_file(filename);
+end
 
+calcAcc = false;
+
+if calcAcc
     % Calculate the norm of accelerometer data
     acc_norm = vecnorm(acc);
 
@@ -42,13 +50,16 @@ function [acc_pow, ephys_dec, dio] = readRHDandDownsample(filename, shift, chunk
             acc_pow = [acc_pow; [w / fs_acc, sum(pwr(iswithin(fr, 3, 5)))]];
         end
     end
+else
+    acc_pow = [];
+end
 
-    %% Downsample electrophysiological data by 100x
-    ephys_dec = zeros(size(ephys, 1), ceil(size(ephys, 2) / 100)); % Preallocate for downsampled data
-    for ele = 1:size(ephys, 1)
-        tmp = ephys(ele, :);
-        tmp = decimate(tmp, 5, 4);
-        tmp = decimate(tmp, 5, 4);
-        ephys_dec(ele, :) = decimate(tmp, 4, 4) * 1e6; % Convert to microvolts
-    end
+%% Downsample electrophysiological data by 100x
+ephys_dec = zeros(size(ephys, 1), ceil(size(ephys, 2) / 100)); % Preallocate for downsampled data
+for ele = 1:size(ephys, 1)
+    tmp = ephys(ele, :);
+    tmp = decimate(tmp, 5, 4);
+    tmp = decimate(tmp, 5, 4);
+    ephys_dec(ele, :) = decimate(tmp, 4, 4) * 1e6; % Convert to microvolts
+end
 end
