@@ -1,4 +1,4 @@
-function [dataVec, dataSerial] = decodeTeensy(filepath, baudRate, fs)
+function [dataVec, dataSerial] = decodeTeensy(rawData, baudRate, fs)
 % decodeTeensy Decodes TTL-level UART data into structured packets and
 % reconstructs a binary data vector.
 %
@@ -22,15 +22,6 @@ end
 if nargin < 2
     baudRate = 3000;
 end
-
-if nargin < 1
-    filepath = fileSelector('Select path to binary file');
-end
-
-% Step 0: Load binary data
-fid = fopen(filepath, 'rb');
-rawData = fread(fid, inf, 'uint16');
-fclose(fid);
 
 % Step 1: Convert the TTL waveform into a stream of UART bytes.
 [byteStream, byteTimes] = decodeUARTfromTTL(rawData, fs, baudRate);

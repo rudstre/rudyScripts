@@ -1,79 +1,73 @@
-function leverTimes = ...
-    getEphysTTLEvents(fpath, EphysFile, levers, heartbeat, heartbeatDuration)
-% TTL times are saved as # samples from the beginning of the ephys
-% recording session. Each recording folder is named according to the MSDN
-% time of the beginning of the recording session (=> offset).
-% This function transforms TTL events times to ms from offset, and
-% transforms the offset to matlab datetime format.
-% An event time can then be extracted by just adding the event time in ms
-% to the offset.
-% E.g. - milliseconds(eventTime) + offset
+function leverTimes = getEphysTTLEvents(dataPath, ephysFilename, leverChannels, heartbeatChannel, heartbeatDuration)
+% Extracts and processes TTL event times from an ephys recording session.
+%
+% TTL times are recorded as the number of samples from the start of the
+% ephys session. This function converts them into milliseconds from the
+% session start and validates heartbeat events.
+%
+% OUTPUT:
+%   leverTimes       - Time of lever events in ms from the beginning of the session
+%   leverStates      - On/Off state for each lever event
+%   leverChs         - Lever input channel identity for each event
+%   heartbeatTimes   - Time of heartbeat events in ms from the session start
+%   heartbeatStates  - On/Off state for heartbeat events
+%   sessionStartTime - MATLAB datetime format for the start of the recording session
+%   leverSamples     - Raw lever event timestamps (in samples)
 
-% OUTPUT: 
-% leverTimes:       Time of lever events in ms from the beginning of the
-%                   recording session
-% leverStates:      On/Off state for each lever event
-% leverChs:         Identity of lever input channel for each event
-% heartbeatTimes:   Time of heartbeat events in ms from the beginning of
-%                   the recording session
-% heartbeatStates:  On/Off state for heartbeat events
-% offset:           matlab datetime format for the beginning of the
-%                   recording session.
-% leverSamples:     
+% Default values for optional arguments
+if nargin < 3, leverChannels = 1:3; end
+if nargin < 4, heartbeatChannel = 4; end
 
-
-if nargin < 3
-    levers=1:3;
-end
-if nargin < 4
-    heartbeat = 4;
+% Ensure filename is a string
+if isnumeric(ephysFilename)
+    ephysFilename = num2str(ephysFilename);
 end
 
-if isnumeric(EphysFile)
-    EphysFile = num2str(EphysFile);
+ttlOffset = 3000; % Offset applied to all TTL timestamps
+
+% Ensure TTLChanges directory exists
+ttlPath = fullfile(dataPath, ephysFilename, 'TTLChanges');
+if ~exist(ttlPath, 'dir')
+    disp('No TTL changes calculated for this file!');
+    return;
 end
 
-ttl_offset = 3000;
-
-%%
-
-if ~exist(fullfile(fpath, EphysFile, 'TTLChanges'))
-    disp(['No TTL changes calculated for this file!!']);
-end
-
-% check to make sure heartbeat is there, if not throw error
-fid = fopen(fullfile(fpath, EphysFile, 'TTLChanges', ['Ch_' num2str(heartbeat-1)]));
-ttl_heartbeat = fread(fid, [1,25], 'uint64=>uint64');
+% Validate heartbeat channel
+heartbeatFile = fullfile(ttlPath, sprintf('Ch_%d', heartbeatChannel - 1));
+fid = fopen(heartbeatFile);
+ttlHeartbeat = fread(fid, [1, 25], 'uint64=>uint64');
 fclose(fid);
-time_heartbeat = double(diff(ttl_heartbeat)) * (100/3000) * (1/1000); % in seconds
-time_heartbeat(1:3) = []; % ok if the first one is weird
-if ~all(time_heartbeat > heartbeatDuration - 0.1 & time_heartbeat < heartbeatDuration + 0.1)
-    disp('here')
+
+% Compute heartbeat intervals (in seconds)
+heartbeatIntervals = double(diff(ttlHeartbeat)) * (100/3000) * (1/1000);
+heartbeatIntervals(1:3) = []; % Ignore first few if they are unreliable
+
+% Check if heartbeat intervals are within expected range
+if ~all(heartbeatIntervals > heartbeatDuration - 0.1 & heartbeatIntervals < heartbeatDuration + 0.1)
+    disp('Heartbeat timing does not match expected duration.');
 end
 
-% load TTLchanges
-ttl_chs = {};
-for ch = 0:15  % might as well load everything
-    if exist(fullfile(fpath, EphysFile, 'TTLChanges', ['Ch_' num2str(ch)]))
-    fid = fopen(fullfile(fpath, EphysFile, 'TTLChanges', ['Ch_' num2str(ch)]));
-    ttl_chs{ch+1} = fread(fid,[1,inf],'uint64=>uint64');
-    fclose(fid);
+% Load TTL events from all channels
+ttlEvents = cell(1, 16);
+for ch = 0:15
+    ttlFile = fullfile(ttlPath, sprintf('Ch_%d', ch));
+    if exist(ttlFile, 'file')
+        fid = fopen(ttlFile);
+        ttlEvents{ch + 1} = fread(fid, [1, inf], 'uint64=>uint64');
+        fclose(fid);
     else
-        ttl_chs{ch+1} = [];
+        ttlEvents{ch + 1} = [];
     end
 end
 
-% convert ttl to ms from start of file
+% Convert TTL timestamps to milliseconds from session start
 for ch = 0:15
-    ttl_chs{ch+1} = double(ttl_chs{ch+1} - ttl_offset) * (100/3000); % in ms!!
+    ttlEvents{ch + 1} = double(ttlEvents{ch + 1} - ttlOffset) * (100/3000);
 end
 
-% concatenate lever taps
-leverEventsAll = [ttl_chs{levers} ];
-[~,idx] = sort(leverEventsAll);
-leverEventsAll = leverEventsAll(idx);
+% Concatenate and sort lever event times
+allLeverEvents = [ttlEvents{leverChannels}];
+allLeverEvents = sort(allLeverEvents);
 
-% concatenate heartbeat
-leverTimes = leverEventsAll;
-
+leverTimes = allLeverEvents;
 end
