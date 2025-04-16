@@ -13,8 +13,8 @@ currentWorkerId = workerId;
 % Load configuration options
 options = load(optPath).opt;
 pairsToProcess = options.pairs;
-binSize = 4;%options.binning;
-centralWindowSize_ms = 10;%options.central_window;
+binSize = 4;%options.binning; % number of weeks per time bin
+centralWindowSize_ms = 10;%options.central_window; % range around which to detect peaks
 baselineMaxLag_ms = 50;%options.max_lag;
 
 % Assign pairs to the current worker
@@ -140,8 +140,7 @@ function [zFinal, lagFinal] = computeExtrema(ccf, lags, lagRange, lambda, window
 %                  if both are significant, returns NaN to indicate ambiguity)
 %     lagFinal   - Lag at which the extreme effect is observed
 
-%% Restrict to specified lag range and |lag| < 6
-%% (Assumes: lags, lagRange, ccf, lambda, windowSize are defined)
+%% Restrict to specified lag range
 
 % Get indices in lagRange, then extend slightly.
 idx = iswithin(lags, lagRange');  % get indices in lagRange
@@ -156,6 +155,7 @@ Nn = 4;
 biasN = sqrt(2 * log(Nn));
 
 threshold = 2; % significance threshold
+maxValidLag = 5; % ms
 
 %% Positive side: per-bin z-scores for excitation
 
@@ -193,7 +193,7 @@ if lags_sub(posPeakIdx(maxPeakLoc)) == 0
     end
 end
 
-validIdxs = iswithin(abs(posLags), 1, 5);
+validIdxs = iswithin(abs(posLags), 1, maxValidLag);
 posLags = posLags(validIdxs);
 posPeaks = posPeaks(validIdxs);
 
@@ -243,7 +243,7 @@ if ~isempty(zNeg)
     negPeaks = -negPeaks;
     negLags = negLags(negPeakIdx);
 
-    validIdxs = iswithin(abs(negLags), 0, 5);
+    validIdxs = iswithin(abs(negLags), 0, maxValidLag);
     negLags = negLags(validIdxs);
     negPeaks = negPeaks(validIdxs);
 else

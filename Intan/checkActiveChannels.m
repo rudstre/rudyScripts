@@ -56,7 +56,7 @@ for f = 2:length(fnames)
         group_ids(end+1) = length(templChNames) + 1;
         templChNames{end + 1} = curChNames;
         fprintf('New active channel group %d starts with %s\n', ...
-            group_ids(end), group_idxs(end));
+            group_ids(end), fnames{group_idxs(end)});
     
     % Match found to old group
     else

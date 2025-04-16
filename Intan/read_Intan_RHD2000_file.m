@@ -1,4 +1,4 @@
-function read_Intan_RHD2000_file(file,path)
+function read_Intan_RHD2000_file(filename)
 
 % read_Intan_RHD2000_file
 %
@@ -17,7 +17,9 @@ function read_Intan_RHD2000_file(file,path)
 % >> amplifier_channels(1)
 % >> plot(t_amplifier, amplifier_data(1,:))
 
-filename = [path,file];
+if nargin < 1
+    filename = fileSelector;
+end
 tic;
 fid = fopen(filename, 'r');
 
@@ -449,9 +451,7 @@ end
 % Move variables to base workspace.
 
 % new for version 2.01: move filename info to base workspace
-filename = file;
 move_to_base_workspace(filename);
-move_to_base_workspace(path);
 
 move_to_base_workspace(notes);
 move_to_base_workspace(frequency_parameters);
