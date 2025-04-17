@@ -142,19 +142,26 @@ function [zFinal, lagFinal] = computeExtrema(ccf, lags, lagRange, lambda, window
 
 %% Restrict to specified lag range
 
+% Bias corrections 
+Np = 7;
+Nn = Np - (windowSize - 1); 
+
+% Correction for event collision detection
+if sum(ccf(iswithin(lags,-1,1))) < 1
+    lagRange(lagRange == 0) = 3 * sign(lagRange(lagRange~=0));
+    Np = Np - 2; Nn = Nn - 2;
+end
+
+biasP = sqrt(2 * log(Np));
+biasN = sqrt(2 * log(Nn));
+
 % Get indices in lagRange, then extend slightly.
 idx = iswithin(lags, lagRange');  % get indices in lagRange
 lags_sub = lags(idx);
 lags_sub = [lagRange(1) - 1, lags_sub, lags_sub(end) + 1];
 ccf_sub  = ccf(idx);
 
-% Bias corrections (unchanged)
-Np = 5; 
-biasP = sqrt(2 * log(Np));
-Nn = 4; 
-biasN = sqrt(2 * log(Nn));
-
-threshold = 4; % significance threshold
+threshold = 2; % significance threshold
 maxValidLag = 5; % ms
 
 %% Positive side: per-bin z-scores for excitation
@@ -293,7 +300,7 @@ else
         lagFinal = lagMaxPos;
     end
 end
-
+[zFinal,lagFinal]
 end
 
 function [spikes, queue] = loadFromCache(cache, queue, unitId, spikePath, maxCacheSize)
