@@ -154,7 +154,7 @@ biasP = sqrt(2 * log(Np));
 Nn = 4; 
 biasN = sqrt(2 * log(Nn));
 
-threshold = 2; % significance threshold
+threshold = 4; % significance threshold
 maxValidLag = 5; % ms
 
 %% Positive side: per-bin z-scores for excitation
