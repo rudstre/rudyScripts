@@ -89,8 +89,8 @@ for pairIdx = 1:size(workerPairs, 1)
         end
 
         % If max is at 0, probably actually the same unit
-        [~,lagMax] = max(crossCorr);
-        if lagValues_samp(lagMax) == 0
+        [maxCorr,lagMax] = max(crossCorr);
+        if lagValues_samp(lagMax) == 0 && maxCorr > 4*lambda
             continue
         end
 
@@ -166,14 +166,13 @@ else
 end
 
 % assign and apply threshold
-if abs(zRaw) < threshold
+if abs(zRaw) < 1
     zFinal   = 0;
     lagFinal = 0;
 else
     zFinal   = zRaw;
     lagFinal = mean(lags_sub);
 end
-[zFinal lagFinal]
 end
 
 function [spikes, queue] = loadFromCache(cache, queue, unitId, spikePath, maxCacheSize)
