@@ -89,10 +89,10 @@ for pairIdx = 1:size(workerPairs, 1)
         end
 
         % If max is at 0, probably actually the same unit
-        [maxCorr,lagMax] = max(crossCorr);
-        if lagValues_samp(lagMax) == 0 && maxCorr > 4*lambda
-            continue
-        end
+        % [maxCorr,lagMax] = max(crossCorr);
+        % if lagValues_samp(lagMax) == 0 && maxCorr > 4*lambda
+        %     continue
+        % end
 
         % Positive lags
         [zscorePosMax(neuronPair(1), neuronPair(2), timeGroupIdx), ...
