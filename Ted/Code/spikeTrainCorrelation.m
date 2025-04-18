@@ -88,6 +88,12 @@ for pairIdx = 1:size(workerPairs, 1)
             continue
         end
 
+        % If max is at 0, probably actually the same unit
+        [~,lagMax] = max(crossCorr);
+        if lagValues_samp(lagMax) == 0
+            continue
+        end
+
         % Positive lags
         [zscorePosMax(neuronPair(1), neuronPair(2), timeGroupIdx), ...
             lagPosMax(neuronPair(1), neuronPair(2), timeGroupIdx)] = ...
@@ -167,6 +173,7 @@ else
     zFinal   = zRaw;
     lagFinal = mean(lags_sub);
 end
+[zFinal lagFinal]
 end
 
 function [spikes, queue] = loadFromCache(cache, queue, unitId, spikePath, maxCacheSize)
