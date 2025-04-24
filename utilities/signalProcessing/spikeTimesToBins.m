@@ -1,20 +1,41 @@
-function [spikes_t,ts,resolution] = spikeTimesToBins(spikes,resolution)
+function [spikes_t, ts, resolution] = spikeTimesToBins(spikes, resolution)
 if nargin < 2
-    resolution = milliseconds(1); % ms resolution by default
+    resolution = milliseconds(1); % Default: 1 ms bins
 end
+
+% Handle empty input
 if isempty(spikes)
-    spikes_t = [];
+    spikes_t = {};
     ts = [];
     return
 end
 
-minCell = cellfun(@min,spikes,'UniformOutput',false);
-maxCell = cellfun(@max,spikes,'UniformOutput',false);
+% Filter out empty cells for min/max calculations
+nonEmptySpikes = spikes(~cellfun(@isempty, spikes));
+if isempty(nonEmptySpikes)
+    spikes_t = cellfun(@(x) [], spikes, 'UniformOutput', false);
+    ts = [];
+    return
+end
 
+% Convert resolution to seconds
 resolution_s = seconds(resolution);
-t_start = min([minCell{:}]) / resolution_s;
-t_end = max([maxCell{:}]) / resolution_s;
 
-[spikes_t,ts_cell] = cellfun(@(s) histcounts(s / resolution_s, t_start : t_end), spikes, 'UniformOutput', false);
-ts = ts_cell{1} * milliseconds(resolution);
+% Determine global min and max spike time
+minTime = min(cellfun(@min, nonEmptySpikes));
+maxTime = max(cellfun(@max, nonEmptySpikes));
+
+% Convert to time in bin units
+t_start = floor(minTime / resolution_s);
+t_end   = ceil(maxTime / resolution_s);
+
+% Create bin edges in bin index units
+edges = t_start : t_end + 1;  % +1 ensures we capture the last bin
+
+% Compute histograms for each spike train (handle empty spike vectors)
+spikes_t = cellfun(@(s) histcounts(s / resolution_s, edges), spikes, 'UniformOutput', false);
+
+% Time vector (bin centers)
+bin_centers = (edges(1:end-1) + 0.5);  % midpoints of bins
+ts = bin_centers * resolution;        % convert back to duration
 end
